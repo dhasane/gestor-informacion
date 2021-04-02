@@ -1,0 +1,25 @@
+[package]
+name = "gestor-informacion"
+version = "0.1.0"
+authors = ["dhasane <danihas@live.com>"]
+edition = "2018"
+
+[[bin]]
+name = "broker"
+path = "src/broker.rs"
+
+[[bin]]
+name = "almacenamiento"
+path = "src/almacenamiento.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+redis = "0.20.0"
+bytes = "1"
+
+# [dependencies.redis]
+# version = "*"
+# [dependencies.redis]
+# git = "https://github.com/mitsuhiko/redis-rs.git"
