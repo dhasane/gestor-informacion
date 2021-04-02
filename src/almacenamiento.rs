@@ -1,24 +1,25 @@
 mod communication;
+use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 
-use std::error::Error;
-use tokio::net::TcpStream;
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    std::fs::create_dir_all("./tmp").unwrap();
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    // let conexion: TcpStream = TcpStream::connect("127.0.0.1:7777").await?;
-    let ip = "127.0.0.1";
-    let port = "7777";
-    let mut conexion = TcpStream::connect(format!("{}:{}", ip, port).as_str())
+    let ip = "127.0.0.1:8070";
+
+    HttpServer::new(|| App::new().service(list_files))
+        .bind(ip)?
+        .run()
         .await
-        .unwrap();
+}
 
-    let mut buf = [0; 1024];
-    loop {
-        // process_socket(socket, addr).await;
-        communication::read_stream(&mut conexion, &mut buf).await;
-        println!("{:?}", buf);
-        communication::receive(communication::write_stream(b"kiubo", &mut conexion).await);
+#[get("/list_files")]
+async fn list_files() -> impl Responder {
+    let vec: Vec<communication::PathName> = communication::get_files();
+    let json = serde_json::to_string(&vec);
+
+    match json {
+        Ok(it) => it,
+        Err(_) => "".to_string(),
     }
-
-    // Ok(())
 }

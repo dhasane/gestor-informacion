@@ -1,36 +1,59 @@
 mod communication;
+use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+extern crate serde;
 
-use std::net::SocketAddr;
-use tokio::net::{TcpListener, TcpStream};
+// #[get("/")]
+// async fn hello() -> impl Responder {
+//     HttpResponse::Ok().body("Hello world!")
+// }
 
-#[tokio::main]
-async fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7777").await.unwrap();
-    // let mut conexiones: Vec<(&TcpStream, &SocketAddr)>;
-
-    loop {
-        let (mut socket, addr) = listener.accept().await.unwrap();
-        // A new task is spawned for each inbound socket. The socket is
-        // moved to the new task and processed there.
-        // conexiones.push((&socket, &addr));
-        tokio::spawn(async move {
-            // process_socket(socket, addr).await;
-            saludo(&mut socket, &addr).await;
-            listen_socket(&mut socket).await;
-        });
-    }
+#[post("/echo")]
+async fn echo(req_body: String) -> impl Responder {
+    HttpResponse::Ok().body(req_body)
 }
 
-async fn listen_socket(conexion: &mut TcpStream) {
-    let mut buf = [0; 1024];
-    loop {
-        // process_socket(socket, addr).await;
-        communication::read_stream(conexion, &mut buf).await;
-        println!("{:?}", buf);
-    }
+// #[get("/{id}/{name}/index.html")]
+// async fn index(web::Path((id, name)): web::Path<(u32, String)>) -> impl Responder {
+//     format!("Hello {}! id:{}", name, id)
+// }
+
+async fn manual_hello() -> impl Responder {
+    HttpResponse::Ok().body("Hey there!")
 }
 
-async fn saludo(socket: &mut TcpStream, addr: &SocketAddr) {
-    println!("Nueva conexion: {}", addr);
-    communication::receive(communication::write_stream(b"holaa", socket).await)
+#[get("connect/{id}")]
+async fn connect(web::Path(id): web::Path<String>) -> impl Responder {
+    format!("Hello id:{}", id)
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let ip = "127.0.0.1:8080";
+
+    HttpServer::new(|| {
+        App::new()
+            .service(echo)
+            .service(index)
+            .route("/hey", web::get().to(manual_hello))
+    })
+    .bind(ip)?
+    .run()
+    .await
+}
+
+#[get("/")]
+fn index() -> HttpResponse {
+    let html = r#"<html>
+        <head><title>Upload Test</title></head>
+        <body>
+            <form target="/" method="post" enctype="multipart/form-data">
+                <input type="file" multiple name="file"/>
+                <button type="submit">Submit</button>
+            </form>
+        </body>
+    </html>"#;
+
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(html)
 }
