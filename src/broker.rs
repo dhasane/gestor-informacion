@@ -22,12 +22,25 @@ async fn put_file(req: HttpRequest) -> impl Responder {
 }
 
 #[get("get_file/{filename}")]
-async fn get_file(web::Path(file_name): web::Path<String>) -> impl Responder {
+async fn get_file(web::Path(_file_name): web::Path<String>) -> impl Responder {
     // TODO: falta pensar como manejar esto
     // se podria hacer que se suba el archivo al broker de manera
     // temporal mientras es reenviado al destino
     // El broker no deberia almacenar nada de manera permanente
     "hola"
+}
+
+#[get("list_files")]
+async fn get_files() -> impl Responder {
+    // TODO: para cada una de las direcciones que se tienen, realizar un
+    // GET /list_files, organizarlo en una unica lista y retornarlo
+
+    // https://doc.rust-lang.org/std/sync/struct.Mutex.html
+
+    // pensar en una forma para que esto sea hecho de manera
+    // periodica, para que no haya que pedir los archivos solo cuando
+    // son necesarios, sino que se tengan desde antes
+    "ye"
 }
 
 #[get("connect/{port}")]
@@ -40,8 +53,8 @@ async fn connect(req: HttpRequest, web::Path(port): web::Path<String>) -> impl R
         extra = format!("{}", a);
 
         let ip: &str = &a[..a.find(':').unwrap()];
-        let dir = format!("http://{}:{}/connect", ip, port);
-        let respuesta = communication::get(&dir).await;
+        let dir = communication::parse_url(&format!("http://{}:{}/connect", ip, port)).unwrap();
+        let respuesta = communication::get(dir).await;
 
         println!("{:?}", respuesta);
     } else {

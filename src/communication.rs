@@ -77,11 +77,33 @@ pub async fn delete_file(file_name: &str) -> Result<(), Error> {
 //
 // pub async fn getFile(id: u32) -> File {}
 
-pub async fn get(url: &str) -> Result<Response, ()> {
+pub async fn conectar() {}
+
+pub fn parse_url(url: &str) -> Result<Url, ()> {
+    match Url::parse(url) {
+        Ok(a) => Ok(a),
+        Err(_) => Err(()),
+    }
+
+    // println!("error parse url: {}", err);
+    // Url {
+    //     // serialization: (),
+    //     // scheme_end: (),
+    //     // username_end: (),
+    //     // host_start: (),
+    //     // host_end: (),
+    //     // host: (),
+    //     port: Some(port),
+    //     path_start: path,
+    //     // query_start: (),
+    //     // fragment_start: (),
+    // }
+}
+
+pub async fn get(url: Url) -> Result<Response, ()> {
     println!("{}", url);
-    let url = Url::parse(url);
     let response;
-    match reqwest::blocking::get(url.unwrap().as_str()) {
+    match reqwest::blocking::get(url.as_str()) {
         Ok(a) => {
             response = a;
         }
@@ -94,22 +116,18 @@ pub async fn get(url: &str) -> Result<Response, ()> {
     Ok(response)
 }
 
-// pub async fn post(url: &str) -> Result<Response, ()> {
-//     // let request_url = format!(
-//     //     "https://api.github.com/repos/{owner}/{repo}/stargazers",
-//     //     owner = "rust-lang-nursery",
-//     //     repo = "rust-cookbook"
-//     // );
-//     println!("{}", url);
-//     let response;
-//     if let Ok(a) = reqwest::post(url).await {
-//         response = a;
-//     } else {
-//         return Err(());
-//     };
-//
-//     Ok(response)
-// }
+pub async fn post(url: Url) -> Result<Response, ()> {
+    // This will POST a body of `foo=bar&baz=quux`
+    let params = [("foo", "bar"), ("baz", "quux")];
+    let client = reqwest::blocking::Client::new();
+    match client.post(url.as_str()).form(&params).send() {
+        Ok(a) => Ok(a),
+        Err(err) => {
+            println!("post error: {}", err);
+            Err(())
+        }
+    }
+}
 //
 // pub async fn post() -> Result<String> {
 //     let body = reqwest::get("https://www.rust-lang.org")

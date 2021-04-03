@@ -7,6 +7,14 @@ fn serv(dir: &str) -> String {
     format!("http://{}/{}", BROKER_DIR, dir)
 }
 
+async fn conectar(port: &str) {
+    let url = communication::parse_url(&serv(&format!("connect/{}", port))).unwrap();
+    let respuesta = communication::get(url).await;
+    if let Ok(a) = respuesta {
+        println!("{:?}", a);
+    };
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     std::fs::create_dir_all(communication::get_dir()).unwrap();
@@ -14,13 +22,9 @@ async fn main() -> std::io::Result<()> {
     let ip = "127.0.0.1";
     let port = "8070";
 
-    let respuesta = communication::get(&serv(&format!("connect/{}", port))).await;
+    conectar(port).await;
 
     let direccion = format!("{ip}:{port}", ip = ip, port = port);
-
-    if let Ok(a) = respuesta {
-        println!("{:?}", a);
-    };
 
     println!("iniciando");
 
@@ -41,12 +45,12 @@ async fn list_files() -> impl Responder {
     }
 }
 
+// esto es una prueba
 #[get("connect")]
 async fn connect(req: HttpRequest) -> impl Responder {
     let ci = req.connection_info();
     let mut extra = "".to_string();
     if let Some(a) = ci.remote_addr() {
-        // TODO: guardar esta conexion
         println!("conexion exitosa: {}", a);
         extra = format!("{}", a);
     } else {
