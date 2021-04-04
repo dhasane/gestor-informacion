@@ -22,6 +22,46 @@ pub struct PathName {
     pub nombre: String,
 }
 
+// se guarda una linea por la relacion entre archivo y conexion
+// a pesar de crear una lista mas larga, facilita la busqueda con base
+// a nombre o conexion
+pub struct DistributedFile {
+    pub nombre: String,
+    pub conexion: Distrib,
+}
+
+/// Representa una conexion, contiene ip y puerto.
+#[derive(Deserialize, Serialize, Clone)]
+pub struct Connection {
+    pub ip: String,
+    pub port: String,
+}
+
+/// Contiene la conexion y el conjunto de archivos que se encuentran en esta.
+#[derive(Deserialize, Serialize, Clone)]
+pub struct Distrib {
+    pub conexion: Connection,
+    pub archivos: Vec<String>,
+}
+
+// impl Clone for Distrib {
+//     fn clone(&self) -> Self {
+//         Distrib{self}
+//     }
+// }
+
+impl PartialEq for Distrib {
+    fn eq(&self, other: &Self) -> bool {
+        self.conexion.ip == other.conexion.ip && self.conexion.port == other.conexion.port
+    }
+}
+
+impl Distrib {
+    pub fn comp(&self, ip: &str, port: &str) -> bool {
+        self.conexion.ip == ip && self.conexion.port == port
+    }
+}
+
 fn get_file_path(filename: &str) -> String {
     format!("{}/{}", get_dir(), sanitize_filename::sanitize(filename))
 }
@@ -77,8 +117,6 @@ pub async fn delete_file(file_name: &str) -> Result<(), Error> {
 //
 // pub async fn getFile(id: u32) -> File {}
 
-pub async fn conectar() {}
-
 pub fn parse_url(url: &str) -> Result<Url, ()> {
     match Url::parse(url) {
         Ok(a) => Ok(a),
@@ -100,6 +138,8 @@ pub fn parse_url(url: &str) -> Result<Url, ()> {
     // }
 }
 
+/// Realizar operacion de GET y retornar el resultado.
+/// Realmente solo es para recordar.
 pub async fn get(url: Url) -> Result<Response, ()> {
     println!("{}", url);
     let response;

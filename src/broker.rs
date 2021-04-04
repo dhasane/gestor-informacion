@@ -1,10 +1,80 @@
 mod communication;
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 extern crate serde;
+use lazy_static::lazy_static;
+use std::sync::{Arc, Mutex};
+
+// static mut DATA: Arc<std::sync::Mutex<Vec<communication::Conexion>>>; // = Arc::new(Mutex::new(vec![]));
+lazy_static! {
+    static ref REGISTRO: Arc<Mutex<FileList>> = Arc::new(Mutex::new(FileList { archivos: vec![] }));
+}
+
+pub struct FileList {
+    archivos: Vec<communication::Distrib>,
+}
+
+impl FileList {
+    /// Agrega una conexion y sus archivos al registro.
+    /// Puede que haya una manera mas facil, pero de momento esto parece
+    /// servir.
+    fn agregar_archivo(&mut self, files: Vec<String>, ip: &str, port: &str) {
+        let con = communication::Distrib {
+            conexion: communication::Connection {
+                ip: ip.to_string(),
+                port: port.to_string(),
+            },
+            archivos: files,
+        };
+        self.archivos.push(con);
+    }
+
+    /// Retorna una copia del registro de archivos.
+    pub fn clone(&self) -> Vec<communication::Distrib> {
+        self.archivos.to_vec()
+    }
+
+    /// Conseguir todos los archivos en una conexion especifica.
+    /// En caso de no encontrar la conexion, retorna un vector vacio.
+    /// Retorna una copia de la lista de archivos de la conexion.
+    pub fn get_filenames_by_connection(&self, ip: &str, port: &str) -> Vec<String> {
+        let archivos: &Vec<communication::Distrib> = &self.archivos;
+        match archivos.iter().find(|&df| df.comp(ip, port)) {
+            Some(f) => f.archivos.clone(),
+            None => vec![],
+        }
+    }
+
+    /// Conseguir todas las conexiones que contienen un archivo especifico.
+    /// Retorna una copia de la lista conexiones.
+    pub fn get_connections_by_filename(&self, nombre: &str) -> Vec<communication::Connection> {
+        let archivos: &Vec<communication::Distrib> = &self.archivos;
+        archivos
+            .iter()
+            .filter(|&df| df.archivos.iter().any(|f| f == nombre))
+            .map(|f| -> communication::Connection { f.conexion.clone() })
+            .collect()
+    }
+}
+
+fn get_files() -> Vec<communication::Distrib> {
+    REGISTRO.lock().unwrap().clone()
+}
 
 #[get("/hello_world")]
 async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Hello world!")
+}
+
+/// muestra el registro de archivos que se tiene en el broker
+#[get("/get_files")]
+async fn get_all_files() -> impl Responder {
+    // &get_archivos()
+    let json = serde_json::to_string(&get_files());
+
+    match json {
+        Ok(it) => it,
+        Err(_) => "".to_string(),
+    }
 }
 
 // #[get("/{id}/{name}/index.html")]
@@ -28,19 +98,6 @@ async fn get_file(web::Path(_file_name): web::Path<String>) -> impl Responder {
     // temporal mientras es reenviado al destino
     // El broker no deberia almacenar nada de manera permanente
     "hola"
-}
-
-#[get("list_files")]
-async fn get_files() -> impl Responder {
-    // TODO: para cada una de las direcciones que se tienen, realizar un
-    // GET /list_files, organizarlo en una unica lista y retornarlo
-
-    // https://doc.rust-lang.org/std/sync/struct.Mutex.html
-
-    // pensar en una forma para que esto sea hecho de manera
-    // periodica, para que no haya que pedir los archivos solo cuando
-    // son necesarios, sino que se tengan desde antes
-    "ye"
 }
 
 #[get("connect/{port}")]
