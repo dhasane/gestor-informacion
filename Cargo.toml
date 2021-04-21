@@ -5,8 +5,12 @@ authors = ["dhasane <danihas@live.com>"]
 edition = "2018"
 
 [[bin]]
-name = "broker"
-path = "src/broker.rs"
+name = "cliente"
+path = "src/cliente.rs"
+
+[[bin]]
+name = "dispatcher"
+path = "src/dispatcher.rs"
 
 [[bin]]
 name = "almacenamiento"

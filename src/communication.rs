@@ -17,19 +17,6 @@ pub fn get_dir() -> String {
     format!("./{dir}", dir = DIRNAME)
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct PathName {
-    pub nombre: String,
-}
-
-// se guarda una linea por la relacion entre archivo y conexion
-// a pesar de crear una lista mas larga, facilita la busqueda con base
-// a nombre o conexion
-pub struct DistributedFile {
-    pub nombre: String,
-    pub conexion: Distrib,
-}
-
 /// Representa una conexion, contiene ip y puerto.
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Connection {
@@ -37,9 +24,15 @@ pub struct Connection {
     pub port: String,
 }
 
+impl Connection {
+    pub fn to_string(&self, cad: String) -> String {
+        format!("http://{}:{}/{}", self.ip, self.port, cad)
+    }
+}
+
 /// Contiene la conexion y el conjunto de archivos que se encuentran en esta.
 #[derive(Deserialize, Serialize, Clone)]
-pub struct Distrib {
+pub struct DistributedFiles {
     pub conexion: Connection,
     pub archivos: Vec<String>,
 }
@@ -50,15 +43,19 @@ pub struct Distrib {
 //     }
 // }
 
-impl PartialEq for Distrib {
+impl PartialEq for DistributedFiles {
     fn eq(&self, other: &Self) -> bool {
         self.conexion.ip == other.conexion.ip && self.conexion.port == other.conexion.port
     }
 }
 
-impl Distrib {
+impl DistributedFiles {
     pub fn comp(&self, ip: &str, port: &str) -> bool {
         self.conexion.ip == ip && self.conexion.port == port
+    }
+
+    pub fn contains_file(&self, filename: String) -> bool {
+        self.archivos.contains(&filename)
     }
 }
 
@@ -88,16 +85,14 @@ async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Ok().into())
 }
 
-pub fn get_files() -> Vec<PathName> {
-    let paths: Vec<PathName> = fs::read_dir(get_dir())
+pub fn get_files() -> Vec<String> {
+    let paths: Vec<String> = fs::read_dir(get_dir())
         .unwrap()
-        .map(|r| -> PathName {
-            PathName {
-                nombre: if let Ok(a) = r {
-                    format!("{}", a.path().display())
-                } else {
-                    "".to_string()
-                },
+        .map(|r| -> String {
+            if let Ok(a) = r {
+                format!("{}", a.path().display())
+            } else {
+                "".to_string()
             }
         })
         .collect();
@@ -105,8 +100,8 @@ pub fn get_files() -> Vec<PathName> {
     paths
 }
 
-pub fn parse_json_file_list(json: String) -> Result<Vec<PathName>, Error> {
-    let array: Vec<PathName> = serde_json::from_str(&json)?;
+pub fn parse_json_file_list(json: String) -> Result<Vec<String>, Error> {
+    let array: Vec<String> = serde_json::from_str(&json)?;
     Ok(array)
 }
 
@@ -140,7 +135,7 @@ pub fn parse_url(url: &str) -> Result<Url, ()> {
 
 /// Realizar operacion de GET y retornar el resultado.
 /// Realmente solo es para recordar.
-pub async fn get(url: Url) -> Result<Response, ()> {
+pub fn get(url: Url) -> Result<Response, ()> {
     println!("{}", url);
     let response;
     match reqwest::blocking::get(url.as_str()) {
@@ -156,11 +151,11 @@ pub async fn get(url: Url) -> Result<Response, ()> {
     Ok(response)
 }
 
-pub async fn post(url: Url) -> Result<Response, ()> {
+pub async fn post(url: Url, json: &str) -> Result<Response, ()> {
     // This will POST a body of `foo=bar&baz=quux`
-    let params = [("foo", "bar"), ("baz", "quux")];
+    // let params = [("foo", "bar"), ("baz", "quux")];
     let client = reqwest::blocking::Client::new();
-    match client.post(url.as_str()).form(&params).send() {
+    match client.post(url.as_str()).form(json).send() {
         Ok(a) => Ok(a),
         Err(err) => {
             println!("post error: {}", err);
@@ -178,3 +173,55 @@ pub async fn post(url: Url) -> Result<Response, ()> {
 //     println!("body = {:?}", body);
 //     Ok(body)
 // }
+
+/// conseguir lista de direcciones viables que contienen un
+/// archivo especifico desde broker
+pub fn pedir_ips_viables(
+    ip_broker: Connection,
+    nombre_archivo: &str,
+) -> Result<Vec<Connection>, reqwest::Error> {
+    let url = ip_broker.to_string(format!("getdirs/{}", nombre_archivo));
+
+    // TODO: llenar vect con las posibles ips
+    let respuesta: reqwest::blocking::Response = reqwest::blocking::get(url)?;
+    println!("{:?}", respuesta);
+
+    let json: String = match respuesta.json() {
+        Ok(a) => a,
+        _ => "".to_string(),
+    };
+    let ret: Vec<Connection> = serde_json::from_str(&json).unwrap();
+    Ok(ret)
+}
+
+fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection {
+    let ret: Connection;
+
+    // TODO: hacer ping a cada una de las ips y medir el tiempo de cada una
+    // retornar la ip que responda mas rapido
+
+    // eliminar las ips de forma automatica que superen un tiempo dado
+    let con = conexiones_posibles.get(0);
+
+    ret = con.unwrap().to_owned();
+    ret
+}
+
+pub fn descargar_archivo(ip_broker: Connection, nombre_archivo: &str) {
+    let ubicacion = "";
+
+    let ips: Vec<Connection> = pedir_ips_viables(ip_broker, nombre_archivo)
+        .unwrap()
+        .iter()
+        .map(|f| -> Connection { f.clone() })
+        .collect();
+
+    let ip = get_conexion_mas_cercana(ips);
+
+    download(ip, nombre_archivo, ubicacion);
+}
+
+pub fn download(ip: Connection, nombre_archivo: &str, ubicacion: &str) {
+    // TODO: pedir nombre_archivo a ip
+    // finalmente se guarda en ubicacion
+}

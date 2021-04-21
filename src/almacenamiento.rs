@@ -9,7 +9,8 @@ fn serv(dir: &str) -> String {
 
 async fn conectar(port: &str) {
     let url = communication::parse_url(&serv(&format!("connect/{}", port))).unwrap();
-    let respuesta = communication::get(url).await;
+    // let respuesta = communication::get(url).await;
+    let respuesta = communication::post(url, &files_as_json()).await;
     if let Ok(a) = respuesta {
         println!("{:?}", a);
     };
@@ -34,15 +35,19 @@ async fn main() -> std::io::Result<()> {
         .await
 }
 
-#[get("/list_files")]
-async fn list_files() -> impl Responder {
-    let vec: Vec<communication::PathName> = communication::get_files();
+fn files_as_json() -> String {
+    let vec: Vec<String> = communication::get_files();
     let json = serde_json::to_string(&vec);
 
     match json {
         Ok(it) => it,
         Err(_) => "".to_string(),
     }
+}
+
+#[get("/list_files")]
+async fn list_files() -> impl Responder {
+    files_as_json()
 }
 
 // esto es una prueba

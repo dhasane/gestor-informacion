@@ -1,0 +1,3 @@
+mod communication;
+
+fn main() {}
