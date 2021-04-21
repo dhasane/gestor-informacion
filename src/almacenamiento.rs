@@ -1,5 +1,12 @@
 mod communication;
-use actix_web::{get, App, HttpRequest, HttpServer, Responder};
+use std::path::PathBuf;
+
+use actix_files as fs;
+use actix_web::{get, App, Error, HttpRequest, HttpServer, Responder};
+use actix_web::{
+    http::header::{ContentDisposition, DispositionType},
+    web,
+};
 
 const BROKER_DIR: &str = "127.0.0.1:8080";
 
@@ -29,10 +36,15 @@ async fn main() -> std::io::Result<()> {
 
     println!("iniciando");
 
-    HttpServer::new(|| App::new().service(list_files).service(connect))
-        .bind(direccion)?
-        .run()
-        .await
+    HttpServer::new(|| {
+        App::new()
+            .service(list_files)
+            .service(connect)
+            .service(file_serve)
+    })
+    .bind(direccion)?
+    .run()
+    .await
 }
 
 fn files_as_json() -> String {
@@ -62,4 +74,21 @@ async fn connect(req: HttpRequest) -> impl Responder {
         println!("conexion vacia");
     }
     format!("conexion: hola {}", extra)
+}
+
+#[get("file/{file_name}")]
+async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::NamedFile, Error> {
+    let path: std::path::PathBuf = PathBuf::from(format!(
+        "{dir}/{file}",
+        dir = communication::get_dir(),
+        file = file_name
+    ));
+    println!("{:?}", path);
+    let file = fs::NamedFile::open(path)?;
+    Ok(file
+        .use_last_modified(true)
+        .set_content_disposition(ContentDisposition {
+            disposition: DispositionType::Attachment,
+            parameters: vec![],
+        }))
 }

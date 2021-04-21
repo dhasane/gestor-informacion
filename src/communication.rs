@@ -90,7 +90,7 @@ pub fn get_files() -> Vec<String> {
         .unwrap()
         .map(|r| -> String {
             if let Ok(a) = r {
-                format!("{}", a.path().display())
+                format!("{}", a.file_name().into_string().unwrap())
             } else {
                 "".to_string()
             }

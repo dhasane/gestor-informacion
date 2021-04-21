@@ -22,6 +22,7 @@ path = "src/almacenamiento.rs"
 tokio = { version = "1", features = ["full"] }
 actix-web = "3"
 actix-multipart = "0.3"
+actix-files = "0.5.0"
 serde = "1.0.125"
 serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json", "blocking"] }
