@@ -15,28 +15,6 @@ fn get_file_path(filename: &str, ubicacion: &str) -> String {
     format!("{}/{}", ubicacion, sanitize_filename::sanitize(filename))
 }
 
-// async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
-//     // iterate over multipart stream
-//     while let Ok(Some(mut field)) = payload.try_next().await {
-//         let content_type = field.content_disposition().unwrap();
-//         let filename = content_type.get_filename().unwrap();
-//         let filepath = get_file_path(filename);
-//
-//         // File::create is blocking operation, use threadpool
-//         let mut f = web::block(|| std::fs::File::create(filepath))
-//             .await
-//             .unwrap();
-//
-//         // Field in turn is stream of *Bytes* object
-//         while let Some(chunk) = field.next().await {
-//             let data = chunk.unwrap();
-//             // filesystem operations are blocking, we have to use threadpool
-//             f = web::block(move || f.write_all(&data).map(|_| f)).await?;
-//         }
-//     }
-//     Ok(HttpResponse::Ok().into())
-// }
-
 pub fn get_files(ubicacion: String) -> Vec<String> {
     let paths: Vec<String> = fs::read_dir(ubicacion)
         .unwrap()
@@ -67,20 +45,6 @@ pub fn parse_url(url: &str) -> Result<Url, ()> {
         Ok(a) => Ok(a),
         Err(_) => Err(()),
     }
-
-    // println!("error parse url: {}", err);
-    // Url {
-    //     // serialization: (),
-    //     // scheme_end: (),
-    //     // username_end: (),
-    //     // host_start: (),
-    //     // host_end: (),
-    //     // host: (),
-    //     port: Some(port),
-    //     path_start: path,
-    //     // query_start: (),
-    //     // fragment_start: (),
-    // }
 }
 
 /// Realizar operacion de GET y retornar el resultado.
@@ -167,19 +131,13 @@ pub async fn descargar_archivo(ip_broker: Connection, nombre_archivo: String, ub
 }
 
 pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Result<(), String> {
-    println!(
-        "Descargando archivo {archivo} de {ip}",
-        archivo = nombre_archivo,
-        ip = ubicacion
-    );
-
     let url = ip.to_string(format!("file/{}", nombre_archivo));
 
     // let target = "https://www.rust-lang.org/logos/rust-logo-512x512.png";
     // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
     let response = match reqwest::blocking::get(url) {
         Ok(it) => it,
-        Err(e) => return Err(format!("Error: {:?}", e)),
+        Err(e) => return Err(format!("Error de conexion:\n{:?}", e)),
     };
 
     let mut dest = {
@@ -200,7 +158,7 @@ pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Re
         // match File::open(filepath)
         {
             Ok(a) => a,
-            Err(e) => return Err(format!("Error: {:?}", e)),
+            Err(e) => return Err(format!("Error creando el archivo: \n {:?}", e)),
         }
     };
     let content = response.text().unwrap();
@@ -208,6 +166,12 @@ pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Re
     match copy(&mut content.as_bytes(), &mut dest) {
         Ok(a) => {
             println!("Resultado exitoso: {}", a);
+            println!(
+                "Descargando archivo {archivo} de {ip}",
+                archivo = nombre_archivo,
+                ip = ubicacion
+            );
+
             Ok(())
         }
         Err(e) => return Err(format!("Error: {:?}", e)),

@@ -115,7 +115,7 @@ async fn go_get_file(web::Path((dir, file_name)): web::Path<(String, String)>) -
             format!("Archivo descargado")
         }
         Err(e) => {
-            format!("Error: {}", e)
+            format!("{}", e)
         }
     }
 }
