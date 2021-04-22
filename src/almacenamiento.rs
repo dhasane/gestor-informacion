@@ -6,7 +6,9 @@ use actix_web::{
     http::header::{ContentDisposition, DispositionType},
     web,
 };
+use communication::{connection, general};
 pub mod communication;
+use connection::Connection;
 
 const BROKER_DIR: &str = "127.0.0.1:8080";
 
@@ -33,9 +35,9 @@ fn serv(dir: &str) -> String {
 }
 
 async fn conectar(port: &str) {
-    let url = communication::general::parse_url(&serv(&format!("connect/{}", port))).unwrap();
-    // let respuesta = communication::general::get(url).await;
-    let respuesta = communication::general::post(url, &files_as_json(get_dir())).await;
+    let url = general::parse_url(&serv(&format!("connect/{}", port))).unwrap();
+    // let respuesta = general::get(url).await;
+    let respuesta = general::post(url, &files_as_json(get_dir())).await;
     if let Ok(a) = respuesta {
         println!("{:?}", a);
     };
@@ -76,7 +78,7 @@ async fn main() -> std::io::Result<()> {
 }
 
 fn files_as_json(ubicacion: String) -> String {
-    let vec: Vec<String> = communication::general::get_files(ubicacion);
+    let vec: Vec<String> = general::get_files(ubicacion);
     let json = serde_json::to_string(&vec);
 
     match json {
@@ -106,11 +108,11 @@ async fn connect(req: HttpRequest) -> impl Responder {
 
 #[get("go_get_file/{dir}/{file_name}")]
 async fn go_get_file(web::Path((dir, file_name)): web::Path<(String, String)>) -> impl Responder {
-    let url = communication::connection::Connection {
+    let url = Connection {
         ip: "127.0.0.1".to_string(),
         port: dir,
     };
-    match communication::general::download(url, file_name, get_dir()) {
+    match general::download(url, file_name, get_dir()) {
         Ok(_) => {
             format!("Archivo descargado")
         }

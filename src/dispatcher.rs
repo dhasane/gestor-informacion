@@ -1,17 +1,19 @@
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 extern crate serde;
+use communication::{distributedfiles, filelist, general};
+use distributedfiles::DistributedFiles;
+use filelist::FileList;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 
 pub mod communication;
 
 lazy_static! {
-    static ref REGISTRO: Arc<Mutex<communication::filelist::FileList>> =
-        Arc::new(Mutex::new(communication::filelist::FileList::create()));
+    static ref REGISTRO: Arc<Mutex<FileList>> = Arc::new(Mutex::new(FileList::create()));
 }
 
 // recortar el llamado y evitar que el lock se prolonge
-fn get_files() -> Vec<communication::distributedfiles::DistributedFiles> {
+fn get_files() -> Vec<DistributedFiles> {
     REGISTRO.lock().unwrap().clone()
 }
 
@@ -39,9 +41,7 @@ async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Resp
 /// muestra el registro de archivos que se tiene en el broker
 #[get("/get_files")]
 async fn get_all_files() -> impl Responder {
-    // &get_archivos()
     let json = serde_json::to_string(&get_files());
-
     match json {
         Ok(it) => it,
         Err(_) => "".to_string(),
@@ -52,24 +52,6 @@ async fn get_all_files() -> impl Responder {
 // async fn index(web::Path((id, name)): web::Path<(u32, String)>) -> impl Responder {
 //     format!("Hello {}! id:{}", name, id)
 // }
-
-#[post("put_file")]
-async fn put_file(req: HttpRequest) -> impl Responder {
-    // TODO: falta pensar como manejar esto
-    // se podria hacer que se suba el archivo al broker de manera
-    // temporal mientras es reenviado al destino
-    // El broker no deberia almacenar nada de manera permanente
-    format!("hola {:?}", req)
-}
-
-#[get("get_file/{filename}")]
-async fn get_file(web::Path(_file_name): web::Path<String>) -> impl Responder {
-    // TODO: falta pensar como manejar esto
-    // se podria hacer que se suba el archivo al broker de manera
-    // temporal mientras es reenviado al destino
-    // El broker no deberia almacenar nada de manera permanente
-    "hola"
-}
 
 #[post("connect/{port}")]
 async fn connect(
@@ -84,9 +66,8 @@ async fn connect(
         extra = format!("{}", a);
 
         let ip: &str = &a[..a.find(':').unwrap()];
-        let dir =
-            communication::general::parse_url(&format!("http://{}:{}/connect", ip, port)).unwrap();
-        let respuesta = communication::general::get(dir);
+        let dir = general::parse_url(&format!("http://{}:{}/connect", ip, port)).unwrap();
+        let respuesta = general::get(dir);
 
         let archivos: Vec<String> = json.0;
 
@@ -108,11 +89,7 @@ async fn main() -> std::io::Result<()> {
     let ip = "127.0.0.1:8080";
 
     HttpServer::new(|| {
-        App::new()
-            .service(index)
-            .service(connect)
-            .service(put_file)
-            .service(get_file)
+        App::new().service(index).service(connect)
         // .route("/hey", web::get().to(manual_hello))
     })
     .bind(ip)?
