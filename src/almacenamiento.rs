@@ -1,5 +1,5 @@
 mod communication;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use actix_files as fs;
 use actix_web::{get, App, Error, HttpRequest, HttpServer, Responder};
@@ -7,8 +7,27 @@ use actix_web::{
     http::header::{ContentDisposition, DispositionType},
     web,
 };
+use communication::Connection;
 
 const BROKER_DIR: &str = "127.0.0.1:8080";
+
+static mut PRUEBA: Option<String> = None;
+
+pub fn set_dir(dir: String) {
+    unsafe {
+        PRUEBA = Some(dir);
+    }
+}
+
+pub fn get_dir() -> String {
+    unsafe {
+        if let Some(dir) = &PRUEBA {
+            format!("./{dir}", dir = dir)
+        } else {
+            "".to_string()
+        }
+    }
+}
 
 fn serv(dir: &str) -> String {
     format!("http://{}/{}", BROKER_DIR, dir)
@@ -17,7 +36,7 @@ fn serv(dir: &str) -> String {
 async fn conectar(port: &str) {
     let url = communication::parse_url(&serv(&format!("connect/{}", port))).unwrap();
     // let respuesta = communication::get(url).await;
-    let respuesta = communication::post(url, &files_as_json()).await;
+    let respuesta = communication::post(url, &files_as_json(get_dir())).await;
     if let Ok(a) = respuesta {
         println!("{:?}", a);
     };
@@ -25,12 +44,21 @@ async fn conectar(port: &str) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    std::fs::create_dir_all(communication::get_dir()).unwrap();
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 1 {
+        println!("Error: es necesario especificar el puerto");
+        return Ok(());
+    }
 
     let ip = "127.0.0.1";
-    let port = "8070";
+    let port = &args[1];
 
-    conectar(port).await;
+    set_dir(format!("tmp-{}", port));
+
+    std::fs::create_dir_all(get_dir()).unwrap();
+
+    conectar(&port).await;
 
     let direccion = format!("{ip}:{port}", ip = ip, port = port);
 
@@ -41,14 +69,15 @@ async fn main() -> std::io::Result<()> {
             .service(list_files)
             .service(connect)
             .service(file_serve)
+            .service(go_get_file)
     })
     .bind(direccion)?
     .run()
     .await
 }
 
-fn files_as_json() -> String {
-    let vec: Vec<String> = communication::get_files();
+fn files_as_json(ubicacion: String) -> String {
+    let vec: Vec<String> = communication::get_files(ubicacion);
     let json = serde_json::to_string(&vec);
 
     match json {
@@ -59,7 +88,7 @@ fn files_as_json() -> String {
 
 #[get("/list_files")]
 async fn list_files() -> impl Responder {
-    files_as_json()
+    files_as_json(get_dir())
 }
 
 // esto es una prueba
@@ -76,13 +105,26 @@ async fn connect(req: HttpRequest) -> impl Responder {
     format!("conexion: hola {}", extra)
 }
 
+#[get("go_get_file/{dir}/{file_name}")]
+async fn go_get_file(web::Path((dir, file_name)): web::Path<(String, String)>) -> impl Responder {
+    let url = Connection {
+        ip: "127.0.0.1".to_string(),
+        port: dir,
+    };
+    match communication::download(url, file_name, get_dir()).await {
+        Ok(_) => {
+            format!("Archivo descargado")
+        }
+        Err(e) => {
+            format!("Error: {}", e)
+        }
+    }
+}
+
 #[get("file/{file_name}")]
 async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::NamedFile, Error> {
-    let path: std::path::PathBuf = PathBuf::from(format!(
-        "{dir}/{file}",
-        dir = communication::get_dir(),
-        file = file_name
-    ));
+    let path: std::path::PathBuf =
+        PathBuf::from(format!("{dir}/{file}", dir = get_dir(), file = file_name));
     println!("{:?}", path);
     let file = fs::NamedFile::open(path)?;
     Ok(file

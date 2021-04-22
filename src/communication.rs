@@ -1,21 +1,13 @@
 #![allow(dead_code)]
 
-use std::fs;
-use std::io::Write;
+use std::fs::{self, File};
 
-use actix_multipart::Multipart;
-use actix_web::{web, Error, HttpResponse};
-use futures::{StreamExt, TryStreamExt};
+use actix_web::Error;
 
 use reqwest::blocking::Response;
 use serde::{Deserialize, Serialize};
+use std::io::copy;
 use url::Url;
-
-const DIRNAME: &str = "tmp";
-
-pub fn get_dir() -> String {
-    format!("./{dir}", dir = DIRNAME)
-}
 
 /// Representa una conexion, contiene ip y puerto.
 #[derive(Deserialize, Serialize, Clone)]
@@ -59,34 +51,34 @@ impl DistributedFiles {
     }
 }
 
-fn get_file_path(filename: &str) -> String {
-    format!("{}/{}", get_dir(), sanitize_filename::sanitize(filename))
+fn get_file_path(filename: &str, ubicacion: &str) -> String {
+    format!("{}/{}", ubicacion, sanitize_filename::sanitize(filename))
 }
 
-async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
-    // iterate over multipart stream
-    while let Ok(Some(mut field)) = payload.try_next().await {
-        let content_type = field.content_disposition().unwrap();
-        let filename = content_type.get_filename().unwrap();
-        let filepath = get_file_path(filename);
+// async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
+//     // iterate over multipart stream
+//     while let Ok(Some(mut field)) = payload.try_next().await {
+//         let content_type = field.content_disposition().unwrap();
+//         let filename = content_type.get_filename().unwrap();
+//         let filepath = get_file_path(filename);
+//
+//         // File::create is blocking operation, use threadpool
+//         let mut f = web::block(|| std::fs::File::create(filepath))
+//             .await
+//             .unwrap();
+//
+//         // Field in turn is stream of *Bytes* object
+//         while let Some(chunk) = field.next().await {
+//             let data = chunk.unwrap();
+//             // filesystem operations are blocking, we have to use threadpool
+//             f = web::block(move || f.write_all(&data).map(|_| f)).await?;
+//         }
+//     }
+//     Ok(HttpResponse::Ok().into())
+// }
 
-        // File::create is blocking operation, use threadpool
-        let mut f = web::block(|| std::fs::File::create(filepath))
-            .await
-            .unwrap();
-
-        // Field in turn is stream of *Bytes* object
-        while let Some(chunk) = field.next().await {
-            let data = chunk.unwrap();
-            // filesystem operations are blocking, we have to use threadpool
-            f = web::block(move || f.write_all(&data).map(|_| f)).await?;
-        }
-    }
-    Ok(HttpResponse::Ok().into())
-}
-
-pub fn get_files() -> Vec<String> {
-    let paths: Vec<String> = fs::read_dir(get_dir())
+pub fn get_files(ubicacion: String) -> Vec<String> {
+    let paths: Vec<String> = fs::read_dir(ubicacion)
         .unwrap()
         .map(|r| -> String {
             if let Ok(a) = r {
@@ -105,8 +97,8 @@ pub fn parse_json_file_list(json: String) -> Result<Vec<String>, Error> {
     Ok(array)
 }
 
-pub async fn delete_file(file_name: &str) -> Result<(), Error> {
-    let filepath = get_file_path(file_name);
+pub async fn delete_file(file_name: &str, ubicacion: &str) -> Result<(), Error> {
+    let filepath = get_file_path(file_name, ubicacion);
     Ok(fs::remove_file(filepath)?)
 }
 //
@@ -207,10 +199,8 @@ fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection 
     ret
 }
 
-pub fn descargar_archivo(ip_broker: Connection, nombre_archivo: &str) {
-    let ubicacion = "";
-
-    let ips: Vec<Connection> = pedir_ips_viables(ip_broker, nombre_archivo)
+pub async fn descargar_archivo(ip_broker: Connection, nombre_archivo: String, ubicacion: String) {
+    let ips: Vec<Connection> = pedir_ips_viables(ip_broker, &nombre_archivo)
         .unwrap()
         .iter()
         .map(|f| -> Connection { f.clone() })
@@ -218,10 +208,56 @@ pub fn descargar_archivo(ip_broker: Connection, nombre_archivo: &str) {
 
     let ip = get_conexion_mas_cercana(ips);
 
-    download(ip, nombre_archivo, ubicacion);
+    match download(ip, nombre_archivo, ubicacion).await {
+        Ok(_) => {
+            println!("funciona correctamente")
+        }
+        Err(e) => {
+            println!("Error: {}", e)
+        }
+    };
 }
 
-pub fn download(ip: Connection, nombre_archivo: &str, ubicacion: &str) {
-    // TODO: pedir nombre_archivo a ip
-    // finalmente se guarda en ubicacion
+pub async fn download(
+    ip: Connection,
+    nombre_archivo: String,
+    ubicacion: String,
+) -> Result<(), String> {
+    println!(
+        "Descargando archivo {archivo} de {ip}",
+        archivo = nombre_archivo,
+        ip = ubicacion
+    );
+
+    let url = ip.to_string(format!("file/{}", nombre_archivo));
+
+    // let target = "https://www.rust-lang.org/logos/rust-logo-512x512.png";
+    let response = match reqwest::get(url).await {
+        Ok(it) => it,
+        Err(e) => return Err(format!("Error: {:?}", e)),
+    };
+
+    let mut dest = {
+        let fname = response
+            .url()
+            .path_segments()
+            .and_then(|segments| segments.last())
+            .and_then(|name| if name.is_empty() { None } else { Some(name) })
+            .unwrap_or("tmp.bin");
+
+        println!("file to download: '{}'", fname);
+        let filepath = format!("{dir}/{file}", dir = ubicacion, file = fname);
+        match File::open(filepath) {
+            Ok(a) => a,
+            Err(e) => return Err(format!("Error: {:?}", e)),
+        }
+    };
+    let content = response.text().await.unwrap();
+    match copy(&mut content.as_bytes(), &mut dest) {
+        Ok(a) => {
+            println!("Resultado exitoso: {}", a);
+            Ok(())
+        }
+        Err(e) => return Err(format!("Error: {:?}", e)),
+    }
 }
