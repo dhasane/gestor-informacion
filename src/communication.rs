@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 
-use std::fs::{self, File};
+use std::fs;
 
 use actix_web::Error;
 
 use reqwest::blocking::Response;
 use serde::{Deserialize, Serialize};
+use std::fs::OpenOptions;
 use std::io::copy;
 use url::Url;
 
@@ -208,7 +209,7 @@ pub async fn descargar_archivo(ip_broker: Connection, nombre_archivo: String, ub
 
     let ip = get_conexion_mas_cercana(ips);
 
-    match download(ip, nombre_archivo, ubicacion).await {
+    match download(ip, nombre_archivo, ubicacion) {
         Ok(_) => {
             println!("funciona correctamente")
         }
@@ -218,11 +219,7 @@ pub async fn descargar_archivo(ip_broker: Connection, nombre_archivo: String, ub
     };
 }
 
-pub async fn download(
-    ip: Connection,
-    nombre_archivo: String,
-    ubicacion: String,
-) -> Result<(), String> {
+pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Result<(), String> {
     println!(
         "Descargando archivo {archivo} de {ip}",
         archivo = nombre_archivo,
@@ -232,7 +229,8 @@ pub async fn download(
     let url = ip.to_string(format!("file/{}", nombre_archivo));
 
     // let target = "https://www.rust-lang.org/logos/rust-logo-512x512.png";
-    let response = match reqwest::get(url).await {
+    // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
+    let response = match reqwest::blocking::get(url) {
         Ok(it) => it,
         Err(e) => return Err(format!("Error: {:?}", e)),
     };
@@ -247,12 +245,19 @@ pub async fn download(
 
         println!("file to download: '{}'", fname);
         let filepath = format!("{dir}/{file}", dir = ubicacion, file = fname);
-        match File::open(filepath) {
+        match OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(filepath)
+        // match File::open(filepath)
+        {
             Ok(a) => a,
             Err(e) => return Err(format!("Error: {:?}", e)),
         }
     };
-    let content = response.text().await.unwrap();
+    let content = response.text().unwrap();
+    println!("contenido: {}", content);
     match copy(&mut content.as_bytes(), &mut dest) {
         Ok(a) => {
             println!("Resultado exitoso: {}", a);

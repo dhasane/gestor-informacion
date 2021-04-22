@@ -111,7 +111,7 @@ async fn go_get_file(web::Path((dir, file_name)): web::Path<(String, String)>) -
         ip: "127.0.0.1".to_string(),
         port: dir,
     };
-    match communication::download(url, file_name, get_dir()).await {
+    match communication::download(url, file_name, get_dir()) {
         Ok(_) => {
             format!("Archivo descargado")
         }

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use communication::DistributedFiles;
 
 use crate::communication::{self, Connection};
