@@ -1,7 +1,6 @@
 #![allow(dead_code)]
-use communication::DistributedFiles;
 
-use crate::communication::{self, Connection};
+use crate::communication::{connection::Connection, distributedfiles::DistributedFiles};
 
 pub struct FileList {
     archivos: Vec<DistributedFiles>,
@@ -11,6 +10,15 @@ impl FileList {
     pub fn create() -> FileList {
         let vect: Vec<DistributedFiles> = vec![];
         FileList { archivos: vect }
+    }
+
+    pub fn print(&self) {
+        for distrib in &self.archivos {
+            println!("conexion : {}", distrib.conexion);
+            for archivo in &distrib.archivos {
+                println!("\t- {}", archivo);
+            }
+        }
     }
 
     /// Agrega una conexion y sus archivos al registro.
@@ -25,6 +33,7 @@ impl FileList {
             archivos: files,
         };
         self.archivos.push(con);
+        self.print();
     }
 
     /// Retorna una copia del registro de archivos.

@@ -5,52 +5,11 @@ use std::fs;
 use actix_web::Error;
 
 use reqwest::blocking::Response;
-use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::copy;
 use url::Url;
 
-/// Representa una conexion, contiene ip y puerto.
-#[derive(Deserialize, Serialize, Clone)]
-pub struct Connection {
-    pub ip: String,
-    pub port: String,
-}
-
-impl Connection {
-    pub fn to_string(&self, cad: String) -> String {
-        format!("http://{}:{}/{}", self.ip, self.port, cad)
-    }
-}
-
-/// Contiene la conexion y el conjunto de archivos que se encuentran en esta.
-#[derive(Deserialize, Serialize, Clone)]
-pub struct DistributedFiles {
-    pub conexion: Connection,
-    pub archivos: Vec<String>,
-}
-
-// impl Clone for Distrib {
-//     fn clone(&self) -> Self {
-//         Distrib{self}
-//     }
-// }
-
-impl PartialEq for DistributedFiles {
-    fn eq(&self, other: &Self) -> bool {
-        self.conexion.ip == other.conexion.ip && self.conexion.port == other.conexion.port
-    }
-}
-
-impl DistributedFiles {
-    pub fn comp(&self, ip: &str, port: &str) -> bool {
-        self.conexion.ip == ip && self.conexion.port == port
-    }
-
-    pub fn contains_file(&self, filename: String) -> bool {
-        self.archivos.contains(&filename)
-    }
-}
+use crate::communication::connection::Connection;
 
 fn get_file_path(filename: &str, ubicacion: &str) -> String {
     format!("{}/{}", ubicacion, sanitize_filename::sanitize(filename))
@@ -102,8 +61,6 @@ pub async fn delete_file(file_name: &str, ubicacion: &str) -> Result<(), Error> 
     let filepath = get_file_path(file_name, ubicacion);
     Ok(fs::remove_file(filepath)?)
 }
-//
-// pub async fn getFile(id: u32) -> File {}
 
 pub fn parse_url(url: &str) -> Result<Url, ()> {
     match Url::parse(url) {
@@ -156,16 +113,6 @@ pub async fn post(url: Url, json: &str) -> Result<Response, ()> {
         }
     }
 }
-//
-// pub async fn post() -> Result<String> {
-//     let body = reqwest::get("https://www.rust-lang.org")
-//         .await?
-//         .text()
-//         .await?;
-//
-//     println!("body = {:?}", body);
-//     Ok(body)
-// }
 
 /// conseguir lista de direcciones viables que contienen un
 /// archivo especifico desde broker

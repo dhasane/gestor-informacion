@@ -1,18 +1,17 @@
-mod communication;
-mod filelist;
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 extern crate serde;
-use communication::DistributedFiles;
-use filelist::FileList;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 
+pub mod communication;
+
 lazy_static! {
-    static ref REGISTRO: Arc<Mutex<FileList>> = Arc::new(Mutex::new(FileList::create()));
+    static ref REGISTRO: Arc<Mutex<communication::filelist::FileList>> =
+        Arc::new(Mutex::new(communication::filelist::FileList::create()));
 }
 
 // recortar el llamado y evitar que el lock se prolonge
-fn get_files() -> Vec<DistributedFiles> {
+fn get_files() -> Vec<communication::distributedfiles::DistributedFiles> {
     REGISTRO.lock().unwrap().clone()
 }
 
@@ -85,8 +84,9 @@ async fn connect(
         extra = format!("{}", a);
 
         let ip: &str = &a[..a.find(':').unwrap()];
-        let dir = communication::parse_url(&format!("http://{}:{}/connect", ip, port)).unwrap();
-        let respuesta = communication::get(dir);
+        let dir =
+            communication::general::parse_url(&format!("http://{}:{}/connect", ip, port)).unwrap();
+        let respuesta = communication::general::get(dir);
 
         let archivos: Vec<String> = json.0;
 
