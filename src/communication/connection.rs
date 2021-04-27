@@ -9,8 +9,12 @@ pub struct Connection {
 }
 
 impl Connection {
+    pub fn base_str(&self) -> String {
+        format!("{}:{}", self.ip, self.port)
+    }
+
     pub fn to_string(&self, cad: String) -> String {
-        format!("http://{}:{}/{}", self.ip, self.port, cad)
+        format!("http://{}/{}", self.base_str(), cad)
     }
 }
 

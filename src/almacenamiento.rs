@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, time::SystemTime};
 
 use actix_files as fs;
 use actix_web::{get, App, Error, HttpRequest, HttpServer, Responder};
@@ -71,6 +71,7 @@ async fn main() -> std::io::Result<()> {
             .service(connect)
             .service(file_serve)
             .service(go_get_file)
+            .service(ping_listener)
     })
     .bind(direccion)?
     .run()
@@ -90,6 +91,11 @@ fn files_as_json(ubicacion: String) -> String {
 #[get("/list_files")]
 async fn list_files() -> impl Responder {
     files_as_json(get_dir())
+}
+
+#[get("/ping")]
+async fn ping_listener() -> impl Responder {
+    format!("{:?}", SystemTime::now())
 }
 
 // esto es una prueba

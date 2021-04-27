@@ -7,6 +7,7 @@ use actix_web::Error;
 use reqwest::blocking::Response;
 use std::fs::OpenOptions;
 use std::io::copy;
+use std::time::SystemTime;
 use url::Url;
 
 use crate::communication::connection::Connection;
@@ -98,17 +99,35 @@ pub fn pedir_ips_viables(
     Ok(ret)
 }
 
+pub fn ping(addr: &Connection) -> Result<u128, reqwest::Error> {
+    let start = SystemTime::now();
+    let url = addr.to_string(format!("ping"));
+    // solo es para ver el tiempo de respuesta
+    // esto actua como "ping"
+    let _respuesta: reqwest::blocking::Response = reqwest::blocking::get(url)?;
+    Ok(start.elapsed().unwrap().as_millis())
+}
+
+/// Hacer ping a cada una de las ips y medir el tiempo de cada una
+/// retornar la ip que responda mas rapido
 fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection {
-    let ret: Connection;
+    let mut cons = conexiones_posibles
+        .iter()
+        .map(|con| (con, ping(con).unwrap()));
+    // TODO: seria chevere sacar el menor desde aca con min o algo asi
 
-    // TODO: hacer ping a cada una de las ips y medir el tiempo de cada una
-    // retornar la ip que responda mas rapido
+    let algo = cons.next().unwrap();
 
-    // eliminar las ips de forma automatica que superen un tiempo dado
-    let con = conexiones_posibles.get(0);
+    let mut ret: &Connection = algo.0;
+    let mut min: u128 = algo.1;
 
-    ret = con.unwrap().to_owned();
-    ret
+    for con in cons {
+        if con.1 < min {
+            ret = con.0;
+            min = con.1;
+        }
+    }
+    ret.to_owned()
 }
 
 pub async fn descargar_archivo(ip_broker: Connection, nombre_archivo: String, ubicacion: String) {
@@ -133,7 +152,6 @@ pub async fn descargar_archivo(ip_broker: Connection, nombre_archivo: String, ub
 pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Result<(), String> {
     let url = ip.to_string(format!("file/{}", nombre_archivo));
 
-    // let target = "https://www.rust-lang.org/logos/rust-logo-512x512.png";
     // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
     let response = match reqwest::blocking::get(url) {
         Ok(it) => it,
