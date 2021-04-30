@@ -52,7 +52,7 @@ async fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
-    let ip = "127.0.0.1";
+    let ip = "0.0.0.0";
     let port = &args[1];
 
     set_dir(format!("tmp-{}", port));
