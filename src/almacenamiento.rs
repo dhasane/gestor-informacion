@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, time::SystemTime};
 
 use actix_files as fs;
-use actix_web::{get, App, Error, HttpRequest, HttpServer, Responder};
+use actix_web::{get, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_web::{
     http::header::{ContentDisposition, DispositionType},
     web,
@@ -67,6 +67,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
+            .service(index)
             .service(list_files)
             .service(connect)
             .service(file_serve)
@@ -112,12 +113,12 @@ async fn connect(req: HttpRequest) -> impl Responder {
     format!("conexion: hola {}", extra)
 }
 
-#[get("go_get_file/{dir}/{file_name}")]
-async fn go_get_file(web::Path((dir, file_name)): web::Path<(String, String)>) -> impl Responder {
-    let url = Connection {
-        ip: "127.0.0.1".to_string(),
-        port: dir,
-    };
+/// Pide al almacenamiento que consiga el archivo file_name encontrado en ip:port
+#[get("go_get_file/{ip}:{port}/{file_name}")]
+async fn go_get_file(
+    web::Path((ip, port, file_name)): web::Path<(String, String, String)>,
+) -> impl Responder {
+    let url = Connection { ip, port };
     match general::download(url, file_name, get_dir()) {
         Ok(_) => {
             format!("Archivo descargado")
@@ -140,4 +141,29 @@ async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::Named
             disposition: DispositionType::Attachment,
             parameters: vec![],
         }))
+}
+
+#[get("/")]
+fn index() -> HttpResponse {
+    let start = r#"<html>
+        <head><title>Upload Test</title></head>
+        <body>
+            <h1> Archivos: </h1>
+            <ul>
+        "#;
+
+    let vec: Vec<String> = general::get_files(get_dir());
+
+    let mid: String = vec.iter().map(|f| format!("<li>{}</li>", f)).collect();
+
+    let end = r#"
+            </ul>
+        </body>
+        </html>"#;
+
+    let html = format!("{}{}{}", start, mid, end);
+
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(html)
 }

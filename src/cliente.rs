@@ -8,8 +8,8 @@ fn main() {
         port: "9090".to_string(),
     };
     match general::ping(&con) {
-        Ok(_) => {
-            println!("exito")
+        Ok(val) => {
+            println!("exito {}", val)
         }
         Err(e) => {
             println!("no {:?}", e)
