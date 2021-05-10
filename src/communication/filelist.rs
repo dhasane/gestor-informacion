@@ -24,12 +24,10 @@ impl FileList {
     /// Agrega una conexion y sus archivos al registro.
     /// Puede que haya una manera mas facil, pero de momento esto parece
     /// servir.
-    pub fn agregar_conexion(&mut self, ip: &str, port: &str, files: Vec<String>) {
+    pub fn agregar_conexion(&mut self, con: Connection, files: Vec<String>) {
+        println!("nueva conexion: {} -> {:?}", con.base_str(), files);
         let con = DistributedFiles {
-            conexion: Connection {
-                ip: ip.to_string(),
-                port: port.to_string(),
-            },
+            conexion: con,
             archivos: files,
         };
         self.archivos.push(con);

@@ -1,6 +1,7 @@
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 extern crate serde;
-use communication::{distributedfiles, filelist, general};
+use communication::{connection, distributedfiles, filelist};
+use connection::Connection;
 use distributedfiles::DistributedFiles;
 use filelist::FileList;
 use lazy_static::lazy_static;
@@ -53,6 +54,9 @@ async fn get_all_files() -> impl Responder {
 //     format!("Hello {}! id:{}", name, id)
 // }
 
+/// Esto es para definir cuando una nueva conexion se genere, de forma
+/// que se pueda guardar la direccion.
+/// Se recibe el puerto por donde se realizara la respuesta.
 #[post("connect/{port}")]
 async fn connect(
     req: HttpRequest,
@@ -65,19 +69,17 @@ async fn connect(
     if let Some(a) = ci.remote_addr() {
         extra = format!("{}", a);
 
-        let ip: &str = &a[..a.find(':').unwrap()];
-        let dir = general::parse_url(&format!("http://{}:{}/connect", ip, port)).unwrap();
-        let respuesta = general::get(dir);
+        let connection = Connection {
+            ip: a[..a.find(':').unwrap()].to_owned(),
+            port,
+        };
 
         let archivos: Vec<String> = json.0;
 
-        // TODO: conseguir los archivos
         REGISTRO
             .lock()
             .unwrap()
-            .agregar_conexion(ip, &port, archivos);
-
-        println!("{:?}", respuesta);
+            .agregar_conexion(connection, archivos);
     } else {
         println!("conexion vacia");
     };
@@ -86,10 +88,13 @@ async fn connect(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let ip = "127.0.0.1:8080";
+    let ip = "0.0.0.0:8080";
 
     HttpServer::new(|| {
-        App::new().service(index).service(connect)
+        App::new()
+            .service(index)
+            .service(connect)
+            .service(get_all_files)
         // .route("/hey", web::get().to(manual_hello))
     })
     .bind(ip)?

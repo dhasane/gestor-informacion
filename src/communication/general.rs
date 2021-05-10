@@ -5,6 +5,7 @@ use std::fs;
 use actix_web::Error;
 
 use reqwest::blocking::Response;
+use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::copy;
 use std::time::SystemTime;
@@ -31,11 +32,6 @@ pub fn get_files(ubicacion: String) -> Vec<String> {
     paths
 }
 
-pub fn parse_json_file_list(json: String) -> Result<Vec<String>, Error> {
-    let array: Vec<String> = serde_json::from_str(&json)?;
-    Ok(array)
-}
-
 pub async fn delete_file(file_name: &str, ubicacion: &str) -> Result<(), Error> {
     let filepath = get_file_path(file_name, ubicacion);
     Ok(fs::remove_file(filepath)?)
@@ -50,7 +46,8 @@ pub fn parse_url(url: &str) -> Result<Url, ()> {
 
 /// Realizar operacion de GET y retornar el resultado.
 /// Realmente solo es para recordar.
-pub fn get(url: Url) -> Result<Response, ()> {
+pub fn get(cnt: Connection, endpoint: String) -> Result<Response, ()> {
+    let url = cnt.to_string(endpoint);
     println!("{}", url);
     let response;
     match reqwest::blocking::get(url.as_str()) {
@@ -66,16 +63,69 @@ pub fn get(url: Url) -> Result<Response, ()> {
     Ok(response)
 }
 
-pub async fn post(url: Url, json: &str) -> Result<Response, ()> {
+pub fn post(cnt: Connection, endpoint: String, json: Value) -> Result<Response, ()> {
     // This will POST a body of `foo=bar&baz=quux`
     // let params = [("foo", "bar"), ("baz", "quux")];
+    let url = cnt.to_string(endpoint);
+
+    println!("post {}", url);
     let client = reqwest::blocking::Client::new();
-    match client.post(url.as_str()).form(json).send() {
+    match client.post(url).json(&json).send() {
         Ok(a) => Ok(a),
         Err(err) => {
             println!("post error: {}", err);
             Err(())
         }
+    }
+}
+
+pub fn send_files(
+    cnt: Connection,
+    endpoint: String,
+    dir: String,
+) -> Result<Response, reqwest::Error> {
+    let url = cnt.to_string(endpoint);
+
+    // curl --request POST \
+    //   --url http://127.0.0.1:8080/connect/5050 \
+    //   --header 'Content-Type: application/json' \
+    //   --data '[
+    // 	"A",
+    // 	"b",
+    // 	"c"
+    // ]'
+
+    println!("post {}", url);
+    let client = reqwest::blocking::Client::new();
+
+    let data = files_as_json(dir);
+
+    println!("{:?}", data);
+
+    // let body = format!("{{\"data\":{data} }}", data = data);
+    // println!("{:?}", body);
+
+    match client
+        .post(url)
+        .header("content-type", "application/json")
+        .body(data)
+        .send()
+    {
+        Ok(a) => Ok(a),
+        Err(err) => {
+            println!("post error: {}", err);
+            Err(err)
+        }
+    }
+}
+
+pub fn files_as_json(ubicacion: String) -> String {
+    let vec: Vec<String> = get_files(ubicacion);
+    let json = serde_json::to_string(&vec);
+
+    match json {
+        Ok(it) => it,
+        Err(_) => "".to_string(),
     }
 }
 
@@ -99,6 +149,7 @@ pub fn pedir_ips_viables(
     Ok(ret)
 }
 
+/// hacer un ""ping"" a la otra maquina
 pub fn ping(addr: &Connection) -> Result<u128, reqwest::Error> {
     let start = SystemTime::now();
     let url = addr.to_string(format!("ping"));

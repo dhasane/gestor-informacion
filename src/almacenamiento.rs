@@ -10,7 +10,7 @@ use communication::{connection, general};
 pub mod communication;
 use connection::Connection;
 
-const BROKER_DIR: &str = "127.0.0.1:8080";
+// static mut BROKER_DIR: Option<Connection> = None;
 
 static mut PRUEBA: Option<String> = None;
 
@@ -19,6 +19,22 @@ pub fn set_dir(dir: String) {
         PRUEBA = Some(dir);
     }
 }
+
+// pub fn set_broker_dir(dir: Connection) {
+//     unsafe {
+//         BROKER_DIR = Some(dir);
+//     }
+// }
+//
+// pub fn get_broker_dir(str: String) -> String {
+//     unsafe {
+//         if let Some(dir) = &BROKER_DIR {
+//             dir.to_string(str)
+//         } else {
+//             "".to_string()
+//         }
+//     }
+// }
 
 pub fn get_dir() -> String {
     unsafe {
@@ -30,16 +46,14 @@ pub fn get_dir() -> String {
     }
 }
 
-fn serv(dir: &str) -> String {
-    format!("http://{}/{}", BROKER_DIR, dir)
-}
+async fn conectar(connection: Connection, port: &str) {
+    println!("conectando a {}", connection.base_str());
 
-async fn conectar(port: &str) {
-    let url = general::parse_url(&serv(&format!("connect/{}", port))).unwrap();
-    // let respuesta = general::get(url).await;
-    let respuesta = general::post(url, &files_as_json(get_dir())).await;
-    if let Ok(a) = respuesta {
-        println!("{:?}", a);
+    let respuesta = general::send_files(connection, format!("connect/{}", port), get_dir());
+
+    match respuesta {
+        Ok(a) => println!("respuesta: {:?}", a),
+        Err(e) => println!("{:?}", e),
     };
 }
 
@@ -55,11 +69,21 @@ async fn main() -> std::io::Result<()> {
     let ip = "0.0.0.0";
     let port = &args[1];
 
+    let broker_ip = &args[2];
+    let broker_port = &args[3];
+
     set_dir(format!("tmp-{}", port));
 
     std::fs::create_dir_all(get_dir()).unwrap();
 
-    conectar(&port).await;
+    conectar(
+        Connection {
+            ip: broker_ip.to_owned(),
+            port: broker_port.to_owned(),
+        },
+        &port,
+    )
+    .await;
 
     let direccion = format!("{ip}:{port}", ip = ip, port = port);
 
@@ -79,19 +103,9 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-fn files_as_json(ubicacion: String) -> String {
-    let vec: Vec<String> = general::get_files(ubicacion);
-    let json = serde_json::to_string(&vec);
-
-    match json {
-        Ok(it) => it,
-        Err(_) => "".to_string(),
-    }
-}
-
 #[get("/list_files")]
 async fn list_files() -> impl Responder {
-    files_as_json(get_dir())
+    format!("{:?}", general::files_as_json(get_dir()))
 }
 
 #[get("/ping")]
@@ -135,6 +149,9 @@ async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::Named
         PathBuf::from(format!("{dir}/{file}", dir = get_dir(), file = file_name));
     println!("{:?}", path);
     let file = fs::NamedFile::open(path)?;
+
+    println!("Se descarga archivo {file}", file = file_name);
+
     Ok(file
         .use_last_modified(true)
         .set_content_disposition(ContentDisposition {
