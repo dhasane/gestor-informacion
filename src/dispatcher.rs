@@ -1,4 +1,5 @@
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use std::env;
 extern crate serde;
 use communication::{connection, distributedfiles, filelist};
 use connection::Connection;
@@ -13,6 +14,8 @@ lazy_static! {
     static ref REGISTRO: Arc<Mutex<FileList>> = Arc::new(Mutex::new(FileList::create()));
 }
 
+pub static PORCENTAJE_DISTRIBUCION: u16 = 20;
+
 // recortar el llamado y evitar que el lock se prolonge
 fn get_files() -> Vec<DistributedFiles> {
     REGISTRO.lock().unwrap().clone()
@@ -20,6 +23,7 @@ fn get_files() -> Vec<DistributedFiles> {
 
 #[get("/hello_world")]
 async fn hello() -> impl Responder {
+    // TODO: usar esto en las demas funciones
     HttpResponse::Ok().body("Hello world!")
 }
 
@@ -35,7 +39,7 @@ async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Resp
 
     match json {
         Ok(it) => it,
-        Err(_) => "".to_string(),
+        Err(e) => e.to_string(),
     }
 }
 
@@ -88,13 +92,22 @@ async fn connect(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let ip = "0.0.0.0:8080";
+    let args: Vec<String> = env::args().collect();
+
+    let port = if args.len() < 1 {
+        &args[1]
+    } else {
+        "8080"
+    };
+
+    let ip = format!("0.0.0.0:{port}", port = port);
 
     HttpServer::new(|| {
         App::new()
             .service(index)
             .service(connect)
             .service(get_all_files)
+            .service(get_dirs_filename)
         // .route("/hey", web::get().to(manual_hello))
     })
     .bind(ip)?
