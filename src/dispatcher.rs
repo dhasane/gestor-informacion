@@ -1,4 +1,8 @@
-use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, rt::{spawn, time}, web};
+use actix_web::{
+    get, post,
+    rt::{spawn, time},
+    web, App, HttpRequest, HttpResponse, HttpServer, Responder,
+};
 use std::{env, time::Duration};
 extern crate serde;
 use communication::{connection, distributedfiles, filelist};
@@ -6,8 +10,8 @@ use connection::Connection;
 use distributedfiles::DistributedFiles;
 use filelist::FileList;
 use lazy_static::lazy_static;
-use std::sync::{Arc, Mutex};
 use rand::Rng;
+use std::sync::{Arc, Mutex};
 
 pub mod communication;
 
@@ -36,24 +40,20 @@ async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Resp
         .get_connections_by_filename(&file_name);
 
     let json = serde_json::to_string(&dirs);
-    HttpResponse::Ok().body(
-        match json {
-            Ok(it) => it,
-            Err(e) => e.to_string(),
-        }
-    )
+    HttpResponse::Ok().body(match json {
+        Ok(it) => it,
+        Err(e) => e.to_string(),
+    })
 }
 
 /// muestra el registro de archivos que se tiene en el broker
 #[get("/get_files")]
 async fn get_all_files() -> impl Responder {
     let json = serde_json::to_string(&get_files());
-    HttpResponse::Ok().body(
-        match json {
-            Ok(it) => it,
-            Err(_) => "".to_string(),
-        }
-    )
+    HttpResponse::Ok().body(match json {
+        Ok(it) => it,
+        Err(_) => "".to_string(),
+    })
 }
 
 /// Esto es para definir cuando una nueva conexion se genere, de forma
@@ -119,31 +119,28 @@ fn go_get(con: Connection, nombre_archivo: &str) {
 }
 
 fn balancear() {
-    let numer_archivos: Vec<(String, u64)> = REGISTRO
-        .lock()
-        .unwrap()
-        .get_number_of_files();
-    println!("{:?}", numer_archivos);
+    let numero_archivos: Vec<(String, u64)> = REGISTRO.lock().unwrap().get_number_of_files();
+    println!("{:?}", numero_archivos);
+
+    let cantidad_conexiones = REGISTRO.lock().unwrap().size();
 
     let mut rng = rand::thread_rng();
 
-    for (nombre, cantidad ) in numer_archivos {
-
-        println!("{} {}", cantidad, MINIMO_NUMERO_ARCHIVOS);
-        let mut diferencia = if cantidad >= MINIMO_NUMERO_ARCHIVOS {
-            0
-        } else {
-            MINIMO_NUMERO_ARCHIVOS - cantidad
-        };
+    for (nombre, cantidad) in numero_archivos {
+        let mut diferencia =
+            if cantidad >= MINIMO_NUMERO_ARCHIVOS || cantidad as usize >= cantidad_conexiones {
+                0
+            } else {
+                MINIMO_NUMERO_ARCHIVOS - cantidad
+            };
 
         if diferencia != 0 {
-
             let mut conexiones_viables: Vec<Connection> = REGISTRO
                 .lock()
                 .unwrap()
                 .get_connections_without_filename(&nombre);
 
-            println!("{:?}", conexiones_viables);
+            println!("conexiones para enviar archivo {} {:?}", nombre, conexiones_viables);
 
             while diferencia > 0 && conexiones_viables.len() > 0 {
                 let pos = rng.gen_range(0..conexiones_viables.len());
@@ -153,10 +150,8 @@ fn balancear() {
                 go_get(conexion, &nombre);
 
                 diferencia -= 1;
-
             }
         }
-
     }
 }
 
@@ -164,11 +159,7 @@ fn balancear() {
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let port = if args.len() < 1 {
-        &args[1]
-    } else {
-        "8080"
-    };
+    let port = if args.len() < 1 { &args[1] } else { "8080" };
 
     let ip = format!("0.0.0.0:{port}", port = port);
 

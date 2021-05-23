@@ -23,6 +23,10 @@ impl FileList {
         }
     }
 
+    pub fn size(&self) -> usize {
+        self.archivos.len()
+    }
+
     /// Agrega una conexion y sus archivos al registro.
     /// Puede que haya una manera mas facil, pero de momento esto parece
     /// servir.
