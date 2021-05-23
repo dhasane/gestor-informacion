@@ -22,6 +22,12 @@ impl PartialEq for DistributedFiles {
     }
 }
 
+impl PartialEq<DistributedFiles> for &DistributedFiles {
+    fn eq(&self, other: &DistributedFiles) -> bool {
+        self.conexion.ip == other.conexion.ip && self.conexion.port == other.conexion.port
+    }
+}
+
 impl DistributedFiles {
     pub fn comp(&self, ip: &str, port: &str) -> bool {
         self.conexion.ip == ip && self.conexion.port == port

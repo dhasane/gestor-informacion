@@ -24,13 +24,19 @@ impl FileList {
     /// Agrega una conexion y sus archivos al registro.
     /// Puede que haya una manera mas facil, pero de momento esto parece
     /// servir.
-    pub fn agregar_conexion(&mut self, con: Connection, files: Vec<String>) {
+    pub fn agregar_o_reemplazar_conexion(&mut self, con: Connection, files: Vec<String>) {
         println!("nueva conexion: {} -> {:?}", con.base_str(), files);
+
         let con = DistributedFiles {
             conexion: con,
             archivos: files,
         };
-        self.archivos.push(con);
+        if let Some(pos) = self.archivos.iter().position( |a| -> bool { a == con }) {
+            let _got = std::mem::replace(&mut self.archivos[pos], con);
+        } else {
+            self.archivos.push(con);
+        }
+
         self.print();
     }
 

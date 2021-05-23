@@ -10,38 +10,52 @@ use communication::{connection, general};
 pub mod communication;
 use connection::Connection;
 
-static mut BROKER_DIR: Option<Connection> = None;
+pub struct Config {
+    pub broker :Connection,
+    pub directorio: String,
+    pub puerto: String,
+}
 
-static mut DIRECTORIO: Option<String> = None;
+static mut CONFIGURACION: Option<Config> = None;
 
-pub fn set_dir(dir: String) {
+pub fn set_config(broker:Connection, directorio: String, puerto: String) {
     unsafe {
-        DIRECTORIO = Some(dir);
+        CONFIGURACION = Some(
+            Config {
+                broker,directorio,puerto
+            }
+        )
     }
 }
 
 pub fn get_dir() -> String {
     unsafe {
-        if let Some(dir) = &DIRECTORIO {
-            format!("./{dir}", dir = dir)
+        if let Some(config) = &CONFIGURACION {
+            format!("./{dir}", dir = config.directorio)
         } else {
-            "".to_string()
+            println!("Error consiguiendo directorio, falta configurar");
+            process::exit(1);
         }
     }
 }
 
-pub fn set_broker_dir(dir: Connection) {
+pub fn get_broker_dir() -> &'static Connection {
     unsafe {
-        BROKER_DIR = Some(dir);
+        if let Some(config) = &CONFIGURACION{
+            &config.broker
+        } else {
+            println!("Error consiguiendo conexion a broker, falta configurar");
+            process::exit(1);
+        }
     }
 }
 
-pub fn get_broker_dir() -> Connection {
+pub fn get_puerto() -> &'static str {
     unsafe {
-        if let Some(dir) = BROKER_DIR.clone(){
-            dir
+        if let Some(config) = &CONFIGURACION{
+            &config.puerto
         } else {
-            println!("Error consiguiendo conexion a broker");
+            println!("Error consiguiendo puerto, falta configurar");
             process::exit(1);
         }
     }
@@ -49,14 +63,16 @@ pub fn get_broker_dir() -> Connection {
 
 /// Se envia el puerto, de forma que el broker sepa por donde responder.
 /// Se envian los archivos pertenecientes al almacenamiento local.
-async fn conectar(connection: Connection, port: &str) {
-    println!("conectando a {}", connection.base_str());
+fn enviar_archivos() {
+    let connection = get_broker_dir();
+    let port = get_puerto();
+    println!("enviando archivos a {}", connection.base_str());
 
     let respuesta = general::send_files(connection, format!("connect/{}", port), get_dir());
 
     match respuesta {
         Ok(_a) => {
-          println!("conectado");
+          println!("archivos enviados exitosamente");
         },
         Err(e) => println!("{:?}", e),
     };
@@ -72,7 +88,6 @@ async fn ping_listener() -> impl Responder {
     format!("{:?}", SystemTime::now())
 }
 
-// esto es una prueba
 #[get("connect")]
 async fn connect(req: HttpRequest) -> impl Responder {
     let ci = req.connection_info();
@@ -91,7 +106,9 @@ async fn connect(req: HttpRequest) -> impl Responder {
 async fn go_get_file(
     web::Path(file_name): web::Path<String>,
 ) -> impl Responder {
-    general::get_file(get_broker_dir(), file_name, get_dir())
+    let ret = general::get_file(get_broker_dir(), file_name, get_dir());
+    enviar_archivos();
+    ret
 }
 
 #[get("file/{file_name}")]
@@ -141,8 +158,6 @@ async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
-        // println!("Error: es necesario especificar el puerto");
-
         println!("Se debe especificar [puerto] [ip broker] [puerto broker]");
         return Ok(());
     }
@@ -153,21 +168,18 @@ async fn main() -> std::io::Result<()> {
     let broker_ip = &args[2];
     let broker_port = &args[3];
 
-    set_dir(format!("tmp-{}", port));
-    set_broker_dir(
+    set_config(
         Connection {
             ip: broker_ip.to_owned(),
             port: broker_port.to_owned(),
-        }
+        },
+        format!("tmp-{}", port),
+        port.to_owned()
     );
 
     std::fs::create_dir_all(get_dir()).unwrap();
 
-    conectar(
-        get_broker_dir(),
-        &port,
-    )
-    .await;
+    enviar_archivos();
 
     let direccion = format!("{ip}:{port}", ip = ip, port = port);
 

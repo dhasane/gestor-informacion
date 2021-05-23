@@ -8,8 +8,6 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
-        // println!("Error: es necesario especificar el puerto");
-
         println!("Se debe especificar [ip broker] [puerto broker] [archivo]");
         return ;
     }
@@ -25,6 +23,6 @@ fn main() {
 
     let filename: String = args[3].to_owned();
 
-    general::get_file(con, filename, dir);
+    general::get_file(&con, filename, dir);
 
 }

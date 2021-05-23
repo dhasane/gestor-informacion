@@ -29,12 +29,7 @@ async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Resp
         .unwrap()
         .get_connections_by_filename(&file_name);
 
-    println!("{:#?}", dirs);
-
     let json = serde_json::to_string(&dirs);
-
-    println!("{:?}", json);
-
     HttpResponse::Ok().body(
         match json {
             Ok(it) => it,
@@ -80,7 +75,7 @@ async fn connect(
         REGISTRO
             .lock()
             .unwrap()
-            .agregar_conexion(connection, archivos);
+            .agregar_o_reemplazar_conexion(connection, archivos);
     } else {
         println!("conexion vacia");
     };

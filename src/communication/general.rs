@@ -80,7 +80,7 @@ pub fn post(cnt: Connection, endpoint: String, json: Value) -> Result<Response, 
 }
 
 pub fn send_files(
-    cnt: Connection,
+    cnt: &Connection,
     endpoint: String,
     dir: String,
 ) -> Result<Response, reqwest::Error> {
@@ -125,7 +125,7 @@ pub fn files_as_json(ubicacion: String) -> String {
 /// conseguir lista de direcciones viables que contienen un
 /// archivo especifico desde broker
 pub fn pedir_ips_viables(
-    ip_broker: Connection,
+    ip_broker: &Connection,
     nombre_archivo: &str,
 ) -> Result<Vec<Connection>, ()> {
     let url = ip_broker.to_string(format!("getdirs/{}", nombre_archivo));
@@ -187,7 +187,7 @@ fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection 
     ret.to_owned()
 }
 
-pub fn get_file(ip_broker: Connection, file_name: String, dir: String) -> String {
+pub fn get_file(ip_broker: &Connection, file_name: String, dir: String) -> String {
     let ips: Vec<Connection> = pedir_ips_viables(ip_broker, &file_name).unwrap();
 
     if ips.is_empty() {
@@ -201,6 +201,8 @@ pub fn get_file(ip_broker: Connection, file_name: String, dir: String) -> String
     println!("{:#?}", ips_viables);
 
     let url = get_conexion_mas_cercana(ips_viables);
+
+    println!("{:?}", url);
 
     match download(url, file_name, dir) {
         Ok(_) => {
@@ -243,14 +245,14 @@ pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Re
         }
     };
     let content = response.text().unwrap();
-    println!("contenido: {}", content);
+    // println!("contenido: {}", content);
     match copy(&mut content.as_bytes(), &mut dest) {
-        Ok(a) => {
-            println!("Resultado exitoso: {}", a);
+        Ok(_a) => {
             println!(
-                "Descargando archivo {archivo} de {ip}",
+                "Descargando archivo {archivo} de {ip} en {ubicacion}",
                 archivo = nombre_archivo,
-                ip = ubicacion
+                ip = ip,
+                ubicacion = ubicacion
             );
 
             Ok(())
