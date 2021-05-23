@@ -12,11 +12,11 @@ use connection::Connection;
 
 // static mut BROKER_DIR: Option<Connection> = None;
 
-static mut PRUEBA: Option<String> = None;
+static mut DIRECTORIO: Option<String> = None;
 
 pub fn set_dir(dir: String) {
     unsafe {
-        PRUEBA = Some(dir);
+        DIRECTORIO = Some(dir);
     }
 }
 
@@ -38,7 +38,7 @@ pub fn set_dir(dir: String) {
 
 pub fn get_dir() -> String {
     unsafe {
-        if let Some(dir) = &PRUEBA {
+        if let Some(dir) = &DIRECTORIO {
             format!("./{dir}", dir = dir)
         } else {
             "".to_string()
@@ -52,7 +52,10 @@ async fn conectar(connection: Connection, port: &str) {
     let respuesta = general::send_files(connection, format!("connect/{}", port), get_dir());
 
     match respuesta {
-        Ok(a) => println!("respuesta: {:?}", a),
+        Ok(_a) => {
+          // println!("respuesta: {:?}", a);
+          println!("conectado");
+        },
         Err(e) => println!("{:?}", e),
     };
 }
@@ -61,8 +64,10 @@ async fn conectar(connection: Connection, port: &str) {
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 1 {
-        println!("Error: es necesario especificar el puerto");
+    if args.len() < 3 {
+        // println!("Error: es necesario especificar el puerto");
+
+        println!("Se debe especificar [puerto] [ip broker] [puerto broker]");
         return Ok(());
     }
 

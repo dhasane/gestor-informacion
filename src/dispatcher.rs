@@ -21,12 +21,6 @@ fn get_files() -> Vec<DistributedFiles> {
     REGISTRO.lock().unwrap().clone()
 }
 
-#[get("/hello_world")]
-async fn hello() -> impl Responder {
-    // TODO: usar esto en las demas funciones
-    HttpResponse::Ok().body("Hello world!")
-}
-
 /// muestra el registro de archivos que se tiene en el broker
 #[get("/getdirs/{filename}")]
 async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Responder {
@@ -35,22 +29,30 @@ async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Resp
         .unwrap()
         .get_connections_by_filename(&file_name);
 
+    println!("{:#?}", dirs);
+
     let json = serde_json::to_string(&dirs);
 
-    match json {
-        Ok(it) => it,
-        Err(e) => e.to_string(),
-    }
+    println!("{:?}", json);
+
+    HttpResponse::Ok().body(
+        match json {
+            Ok(it) => it,
+            Err(e) => e.to_string(),
+        }
+    )
 }
 
 /// muestra el registro de archivos que se tiene en el broker
 #[get("/get_files")]
 async fn get_all_files() -> impl Responder {
     let json = serde_json::to_string(&get_files());
-    match json {
-        Ok(it) => it,
-        Err(_) => "".to_string(),
-    }
+    HttpResponse::Ok().body(
+        match json {
+            Ok(it) => it,
+            Err(_) => "".to_string(),
+        }
+    )
 }
 
 // #[get("/{id}/{name}/index.html")]

@@ -23,3 +23,9 @@ impl fmt::Display for Connection {
         write!(f, "({ip}:{port})", ip = self.ip, port = self.port)
     }
 }
+
+impl fmt::Debug for Connection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({ip}:{port})", ip = self.ip, port = self.port)
+    }
+}

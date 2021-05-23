@@ -95,15 +95,8 @@ pub fn send_files(
     // 	"c"
     // ]'
 
-    println!("post {}", url);
     let client = reqwest::blocking::Client::new();
-
     let data = files_as_json(dir);
-
-    println!("{:?}", data);
-
-    // let body = format!("{{\"data\":{data} }}", data = data);
-    // println!("{:?}", body);
 
     match client
         .post(url)
@@ -134,17 +127,31 @@ pub fn files_as_json(ubicacion: String) -> String {
 pub fn pedir_ips_viables(
     ip_broker: Connection,
     nombre_archivo: &str,
-) -> Result<Vec<Connection>, reqwest::Error> {
+) -> Result<Vec<Connection>, ()> {
     let url = ip_broker.to_string(format!("getdirs/{}", nombre_archivo));
 
-    let respuesta: reqwest::blocking::Response = reqwest::blocking::get(url)?;
-    println!("{:?}", respuesta);
-
-    let json: String = match respuesta.json() {
-        Ok(a) => a,
-        _ => "".to_string(),
+    let respuesta = match reqwest::blocking::get(url) {
+        Ok(it) => it,
+        Err(e) => {
+            println!("Error de conexion:\n{:?}", e);
+            return Err(());
+        }
     };
-    let ret: Vec<Connection> = serde_json::from_str(&json).unwrap();
+
+    let texto = respuesta.text();
+
+    let json = match texto {
+        Ok(a) => a,
+        Err(e) => {
+            println!("{:?}", e);
+            "".to_string()
+        }
+    };
+    let ret: Vec<Connection> = if json != "" {
+        serde_json::from_str(&json).unwrap()
+    } else {
+        vec![]
+    };
     Ok(ret)
 }
 
@@ -180,16 +187,20 @@ fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection 
     ret.to_owned()
 }
 
-pub fn descargar_archivo(ip_broker: Connection, nombre_archivo: String, ubicacion: String) {
-    let ips: Vec<Connection> = pedir_ips_viables(ip_broker, &nombre_archivo)
-        .unwrap()
-        .iter()
-        .map(|f| -> Connection { f.clone() })
-        .collect();
+pub fn descargar_archivo(ip_broker: Connection, file_name: String, dir: String) {
+    let ips: Vec<Connection> = pedir_ips_viables(ip_broker, &file_name).unwrap();
 
-    let ip = get_conexion_mas_cercana(ips);
+    if ips.is_empty() {
+        return;
+    }
 
-    match download(ip, nombre_archivo, ubicacion) {
+    let ips_viables: Vec<Connection> = ips.iter().map(|f| -> Connection { f.clone() }).collect();
+
+    println!("{:#?}", ips_viables);
+
+    let url = get_conexion_mas_cercana(ips_viables);
+
+    match download(url, file_name, dir) {
         Ok(_) => {
             println!("funciona correctamente")
         }
