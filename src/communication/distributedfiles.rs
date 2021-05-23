@@ -10,12 +10,6 @@ pub struct DistributedFiles {
     pub archivos: Vec<String>,
 }
 
-// impl Clone for Distrib {
-//     fn clone(&self) -> Self {
-//         Distrib{self}
-//     }
-// }
-
 impl PartialEq for DistributedFiles {
     fn eq(&self, other: &Self) -> bool {
         self.conexion.ip == other.conexion.ip && self.conexion.port == other.conexion.port

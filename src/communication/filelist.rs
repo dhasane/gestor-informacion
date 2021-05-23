@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+
 use crate::communication::{connection::Connection, distributedfiles::DistributedFiles};
 
 pub struct FileList {
@@ -65,5 +67,34 @@ impl FileList {
             .filter(|&df| df.archivos.iter().any(|f| -> bool { f == nombre }))
             .map(|f| -> Connection { f.conexion.clone() })
             .collect()
+    }
+
+    /// Conseguir todas las conexiones que no contienen un archivo especifico.
+    /// Retorna una copia de la lista conexiones.
+    pub fn get_connections_without_filename(&self, nombre: &str) -> Vec<Connection> {
+        let archivos: &Vec<DistributedFiles> = &self.archivos;
+        archivos
+            .iter()
+            .filter(|&df| df.archivos.iter().any(|f| -> bool { f != nombre }))
+            .map(|f| -> Connection { f.conexion.clone() })
+            .collect()
+    }
+
+    /// Conseguir todas las conexiones que no contienen un archivo especifico.
+    /// Retorna una copia de la lista conexiones.
+    pub fn get_number_of_files(&self) -> Vec<(String, u64)> {
+        let archivos_dist: &Vec<DistributedFiles> = &self.archivos;
+        let mut numero_archivos : HashMap<String, u64> = HashMap::new();
+
+        for archivo in archivos_dist {
+            for a in &archivo.archivos  {
+                *numero_archivos.entry(a.to_string()).or_insert(0) += 1;
+            }
+        }
+
+        numero_archivos.into_iter()
+            .map(|(key, value)| {(key,value)})
+            .collect()
+
     }
 }

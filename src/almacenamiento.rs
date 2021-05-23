@@ -106,9 +106,16 @@ async fn connect(req: HttpRequest) -> impl Responder {
 async fn go_get_file(
     web::Path(file_name): web::Path<String>,
 ) -> impl Responder {
-    let ret = general::get_file(get_broker_dir(), file_name, get_dir());
-    enviar_archivos();
-    ret
+
+    if !general::get_files(get_dir()).iter().any(|f| f == &file_name) {
+
+        let ret = general::get_file(get_broker_dir(), file_name, get_dir());
+        enviar_archivos();
+        ret
+    } else {
+        "no se descargo el archivo".to_string()
+    }
+
 }
 
 #[get("file/{file_name}")]

@@ -1,5 +1,5 @@
-use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use std::env;
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, rt::{spawn, time}, web};
+use std::{env, time::Duration};
 extern crate serde;
 use communication::{connection, distributedfiles, filelist};
 use connection::Connection;
@@ -7,6 +7,7 @@ use distributedfiles::DistributedFiles;
 use filelist::FileList;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
+use rand::Rng;
 
 pub mod communication;
 
@@ -14,7 +15,12 @@ lazy_static! {
     static ref REGISTRO: Arc<Mutex<FileList>> = Arc::new(Mutex::new(FileList::create()));
 }
 
+// tiempo en segundos para balancear
+pub static TIEMPO_BALANCEO: u64 = 30;
+
 pub static PORCENTAJE_DISTRIBUCION: u16 = 20;
+
+pub static MINIMO_NUMERO_ARCHIVOS: u64 = 3;
 
 // recortar el llamado y evitar que el lock se prolonge
 fn get_files() -> Vec<DistributedFiles> {
@@ -101,6 +107,59 @@ fn index() -> HttpResponse {
         .body(html)
 }
 
+fn go_get(con: Connection, nombre_archivo: &str) {
+    let url = con.to_string(format!("go_get_file/{}", nombre_archivo));
+    let respuesta = match reqwest::blocking::get(url) {
+        Ok(it) => it.text().unwrap(),
+        Err(e) => {
+            format!("Error de conexion:\n{:?}", e)
+        }
+    };
+    println!("{}", respuesta);
+}
+
+fn balancear() {
+    let numer_archivos: Vec<(String, u64)> = REGISTRO
+        .lock()
+        .unwrap()
+        .get_number_of_files();
+    println!("{:?}", numer_archivos);
+
+    let mut rng = rand::thread_rng();
+
+    for (nombre, cantidad ) in numer_archivos {
+
+        println!("{} {}", cantidad, MINIMO_NUMERO_ARCHIVOS);
+        let mut diferencia = if cantidad >= MINIMO_NUMERO_ARCHIVOS {
+            0
+        } else {
+            MINIMO_NUMERO_ARCHIVOS - cantidad
+        };
+
+        if diferencia != 0 {
+
+            let mut conexiones_viables: Vec<Connection> = REGISTRO
+                .lock()
+                .unwrap()
+                .get_connections_without_filename(&nombre);
+
+            println!("{:?}", conexiones_viables);
+
+            while diferencia > 0 && conexiones_viables.len() > 0 {
+                let pos = rng.gen_range(0..conexiones_viables.len());
+
+                let conexion: Connection = conexiones_viables.remove(pos);
+
+                go_get(conexion, &nombre);
+
+                diferencia -= 1;
+
+            }
+        }
+
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -112,6 +171,14 @@ async fn main() -> std::io::Result<()> {
     };
 
     let ip = format!("0.0.0.0:{port}", port = port);
+
+    spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(TIEMPO_BALANCEO));
+        loop {
+            interval.tick().await;
+            balancear();
+        }
+    });
 
     HttpServer::new(|| {
         App::new()
