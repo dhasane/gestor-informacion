@@ -187,14 +187,16 @@ fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection 
     ret.to_owned()
 }
 
-pub fn descargar_archivo(ip_broker: Connection, file_name: String, dir: String) {
+pub fn get_file(ip_broker: Connection, file_name: String, dir: String) -> String {
     let ips: Vec<Connection> = pedir_ips_viables(ip_broker, &file_name).unwrap();
 
     if ips.is_empty() {
-        return;
+        return format!("No se han conseguido direcciones para el archivo {}", file_name);
     }
 
-    let ips_viables: Vec<Connection> = ips.iter().map(|f| -> Connection { f.clone() }).collect();
+    let ips_viables: Vec<Connection> = ips.iter()
+        .map(|f| -> Connection { f.clone() })
+        .collect();
 
     println!("{:#?}", ips_viables);
 
@@ -202,12 +204,12 @@ pub fn descargar_archivo(ip_broker: Connection, file_name: String, dir: String) 
 
     match download(url, file_name, dir) {
         Ok(_) => {
-            println!("funciona correctamente")
+            format!("Archivo descargado")
         }
         Err(e) => {
-            println!("Error: {}", e)
+            format!("{}", e)
         }
-    };
+    }
 }
 
 pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Result<(), String> {

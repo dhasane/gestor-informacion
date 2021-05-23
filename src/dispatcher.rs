@@ -55,11 +55,6 @@ async fn get_all_files() -> impl Responder {
     )
 }
 
-// #[get("/{id}/{name}/index.html")]
-// async fn index(web::Path((id, name)): web::Path<(u32, String)>) -> impl Responder {
-//     format!("Hello {}! id:{}", name, id)
-// }
-
 /// Esto es para definir cuando una nueva conexion se genere, de forma
 /// que se pueda guardar la direccion.
 /// Se recibe el puerto por donde se realizara la respuesta.
@@ -92,6 +87,25 @@ async fn connect(
     format!("conexion: hola {}", extra)
 }
 
+// TODO: esto podria valer la pena quitarlo
+// o aunuque sea hacerlo util
+#[get("/")]
+fn index() -> HttpResponse {
+    let html = r#"<html>
+        <head><title>Upload Test</title></head>
+        <body>
+            <form target="/" method="post" enctype="multipart/form-data">
+                <input type="file" multiple name="file"/>
+                <button type="submit">Submit</button>
+            </form>
+        </body>
+    </html>"#;
+
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(html)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -115,21 +129,4 @@ async fn main() -> std::io::Result<()> {
     .bind(ip)?
     .run()
     .await
-}
-
-#[get("/")]
-fn index() -> HttpResponse {
-    let html = r#"<html>
-        <head><title>Upload Test</title></head>
-        <body>
-            <form target="/" method="post" enctype="multipart/form-data">
-                <input type="file" multiple name="file"/>
-                <button type="submit">Submit</button>
-            </form>
-        </body>
-    </html>"#;
-
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(html)
 }

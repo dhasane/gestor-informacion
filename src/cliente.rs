@@ -14,7 +14,6 @@ fn main() {
         return ;
     }
 
-
     let dir = format!("archivos-cliente");
 
     std::fs::create_dir_all(&dir).unwrap();
@@ -26,14 +25,6 @@ fn main() {
 
     let filename: String = args[3].to_owned();
 
-    general::descargar_archivo(con, filename, dir);
+    general::get_file(con, filename, dir);
 
-    // match general::ping(&con) {
-    //     Ok(val) => {
-    //         println!("exito {}", val)
-    //     }
-    //     Err(e) => {
-    //         println!("no {:?}", e)
-    //     }
-    // };
 }

@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, time::SystemTime};
+use std::{env, path::PathBuf, process, time::SystemTime};
 
 use actix_files as fs;
 use actix_web::{get, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
@@ -10,7 +10,7 @@ use communication::{connection, general};
 pub mod communication;
 use connection::Connection;
 
-// static mut BROKER_DIR: Option<Connection> = None;
+static mut BROKER_DIR: Option<Connection> = None;
 
 static mut DIRECTORIO: Option<String> = None;
 
@@ -19,22 +19,6 @@ pub fn set_dir(dir: String) {
         DIRECTORIO = Some(dir);
     }
 }
-
-// pub fn set_broker_dir(dir: Connection) {
-//     unsafe {
-//         BROKER_DIR = Some(dir);
-//     }
-// }
-//
-// pub fn get_broker_dir(str: String) -> String {
-//     unsafe {
-//         if let Some(dir) = &BROKER_DIR {
-//             dir.to_string(str)
-//         } else {
-//             "".to_string()
-//         }
-//     }
-// }
 
 pub fn get_dir() -> String {
     unsafe {
@@ -46,6 +30,25 @@ pub fn get_dir() -> String {
     }
 }
 
+pub fn set_broker_dir(dir: Connection) {
+    unsafe {
+        BROKER_DIR = Some(dir);
+    }
+}
+
+pub fn get_broker_dir() -> Connection {
+    unsafe {
+        if let Some(dir) = BROKER_DIR.clone(){
+            dir
+        } else {
+            println!("Error consiguiendo conexion a broker");
+            process::exit(1);
+        }
+    }
+}
+
+/// Se envia el puerto, de forma que el broker sepa por donde responder.
+/// Se envian los archivos pertenecientes al almacenamiento local.
 async fn conectar(connection: Connection, port: &str) {
     println!("conectando a {}", connection.base_str());
 
@@ -53,59 +56,10 @@ async fn conectar(connection: Connection, port: &str) {
 
     match respuesta {
         Ok(_a) => {
-          // println!("respuesta: {:?}", a);
           println!("conectado");
         },
         Err(e) => println!("{:?}", e),
     };
-}
-
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() < 3 {
-        // println!("Error: es necesario especificar el puerto");
-
-        println!("Se debe especificar [puerto] [ip broker] [puerto broker]");
-        return Ok(());
-    }
-
-    let ip = "0.0.0.0";
-    let port = &args[1];
-
-    let broker_ip = &args[2];
-    let broker_port = &args[3];
-
-    set_dir(format!("tmp-{}", port));
-
-    std::fs::create_dir_all(get_dir()).unwrap();
-
-    conectar(
-        Connection {
-            ip: broker_ip.to_owned(),
-            port: broker_port.to_owned(),
-        },
-        &port,
-    )
-    .await;
-
-    let direccion = format!("{ip}:{port}", ip = ip, port = port);
-
-    println!("iniciando");
-
-    HttpServer::new(|| {
-        App::new()
-            .service(index)
-            .service(list_files)
-            .service(connect)
-            .service(file_serve)
-            .service(go_get_file)
-            .service(ping_listener)
-    })
-    .bind(direccion)?
-    .run()
-    .await
 }
 
 #[get("/list_files")]
@@ -132,20 +86,12 @@ async fn connect(req: HttpRequest) -> impl Responder {
     format!("conexion: hola {}", extra)
 }
 
-/// Pide al almacenamiento que consiga el archivo file_name encontrado en ip:port
-#[get("go_get_file/{ip}:{port}/{file_name}")]
+/// Pide al almacenamiento que consiga el archivo file_name
+#[get("go_get_file/{file_name}")]
 async fn go_get_file(
-    web::Path((ip, port, file_name)): web::Path<(String, String, String)>,
+    web::Path(file_name): web::Path<String>,
 ) -> impl Responder {
-    let url = Connection { ip, port };
-    match general::download(url, file_name, get_dir()) {
-        Ok(_) => {
-            format!("Archivo descargado")
-        }
-        Err(e) => {
-            format!("{}", e)
-        }
-    }
+    general::get_file(get_broker_dir(), file_name, get_dir())
 }
 
 #[get("file/{file_name}")]
@@ -188,4 +134,53 @@ fn index() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(html)
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 3 {
+        // println!("Error: es necesario especificar el puerto");
+
+        println!("Se debe especificar [puerto] [ip broker] [puerto broker]");
+        return Ok(());
+    }
+
+    let ip = "0.0.0.0";
+    let port = &args[1];
+
+    let broker_ip = &args[2];
+    let broker_port = &args[3];
+
+    set_dir(format!("tmp-{}", port));
+    set_broker_dir(
+        Connection {
+            ip: broker_ip.to_owned(),
+            port: broker_port.to_owned(),
+        }
+    );
+
+    std::fs::create_dir_all(get_dir()).unwrap();
+
+    conectar(
+        get_broker_dir(),
+        &port,
+    )
+    .await;
+
+    let direccion = format!("{ip}:{port}", ip = ip, port = port);
+
+    HttpServer::new(|| {
+        App::new()
+            .service(index)
+            .service(list_files)
+            .service(connect)
+            .service(file_serve)
+            .service(go_get_file)
+            .service(ping_listener)
+    })
+    .bind(direccion)?
+    .run()
+    .await
 }
