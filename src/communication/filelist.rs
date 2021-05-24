@@ -31,16 +31,21 @@ impl FileList {
     /// Puede que haya una manera mas facil, pero de momento esto parece
     /// servir.
     pub fn agregar_o_reemplazar_conexion(&mut self, con: Connection, files: Vec<String>) {
-        println!("nueva conexion: {} -> {:?}", con.base_str(), files);
-
-        let con = DistributedFiles {
+        let accion = format!("{} -> {:?}", con.base_str(), files);
+        let dist_file = DistributedFiles {
             conexion: con,
             archivos: files,
         };
-        if let Some(pos) = self.archivos.iter().position( |a| -> bool { a == con }) {
-            let _got = std::mem::replace(&mut self.archivos[pos], con);
+        if let Some(pos) = self
+            .archivos
+            .iter()
+            .position(|a| -> bool { a == dist_file })
+        {
+            println!("reemplazando conexion: {} ", accion);
+            let _got = std::mem::replace(&mut self.archivos[pos], dist_file);
         } else {
-            self.archivos.push(con);
+            println!("nueva conexion: {} ", accion);
+            self.archivos.push(dist_file);
         }
 
         self.print();
@@ -77,9 +82,10 @@ impl FileList {
     /// Retorna una copia de la lista conexiones.
     pub fn get_connections_without_filename(&self, nombre: &str) -> Vec<Connection> {
         let archivos: &Vec<DistributedFiles> = &self.archivos;
+
         archivos
             .iter()
-            .filter(|&df| df.archivos.iter().any(|f| -> bool { f != nombre }))
+            .filter(|&df| !df.archivos.iter().any(|f| -> bool { f == nombre }))
             .map(|f| -> Connection { f.conexion.clone() })
             .collect()
     }
@@ -88,17 +94,17 @@ impl FileList {
     /// Retorna una copia de la lista conexiones.
     pub fn get_number_of_files(&self) -> Vec<(String, u64)> {
         let archivos_dist: &Vec<DistributedFiles> = &self.archivos;
-        let mut numero_archivos : HashMap<String, u64> = HashMap::new();
+        let mut numero_archivos: HashMap<String, u64> = HashMap::new();
 
         for archivo in archivos_dist {
-            for a in &archivo.archivos  {
+            for a in &archivo.archivos {
                 *numero_archivos.entry(a.to_string()).or_insert(0) += 1;
             }
         }
 
-        numero_archivos.into_iter()
-            .map(|(key, value)| {(key,value)})
+        numero_archivos
+            .into_iter()
+            .map(|(key, value)| (key, value))
             .collect()
-
     }
 }

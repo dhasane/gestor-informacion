@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::communication::connection::Connection;
 
@@ -29,5 +30,11 @@ impl DistributedFiles {
 
     pub fn contains_file(&self, filename: String) -> bool {
         self.archivos.contains(&filename)
+    }
+}
+
+impl fmt::Display for DistributedFiles {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}):{:?}", self.conexion.base_str(), self.archivos)
     }
 }

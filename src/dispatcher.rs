@@ -147,10 +147,12 @@ fn balancear() {
 
                 let conexion: Connection = conexiones_viables.remove(pos);
 
+                println!("{} <- {}", conexion, nombre);
                 go_get(conexion, &nombre);
 
                 diferencia -= 1;
             }
+            println!("================================");
         }
     }
 }
