@@ -88,19 +88,55 @@ async fn connect(
     format!("conexion: hola {}", extra)
 }
 
-// TODO: esto podria valer la pena quitarlo
-// o aunuque sea hacerlo util
 #[get("/")]
 fn index() -> HttpResponse {
-    let html = r#"<html>
+    let numero_archivos: String = REGISTRO
+        .lock()
+        .unwrap()
+        .get_number_of_files()
+        .iter()
+        .map(|(nombre, cantidad)| -> String {
+            format!("<tr><th>{}</th><th>{}</th></tr>", nombre, cantidad)
+        })
+        .collect::<String>();
+
+    let conexion_archivos: String = REGISTRO
+        .lock()
+        .unwrap()
+        .clone()
+        .iter()
+        .map(|distrib_file| -> String {
+            format!(
+                "conexion: {conexion} <ul> {archivos} </ul>",
+                conexion = distrib_file.conexion,
+                archivos = distrib_file
+                    .archivos
+                    .iter()
+                    .map(|a| -> String { format!("<li>{}</li>", a) })
+                    .collect::<String>()
+            )
+        })
+        .collect();
+
+    let html = format!(
+        r#"<html>
         <head><title>Upload Test</title></head>
         <body>
-            <form target="/" method="post" enctype="multipart/form-data">
-                <input type="file" multiple name="file"/>
-                <button type="submit">Submit</button>
-            </form>
+            <h1> Archivos y cantidad </h1>
+                <table>
+                <tr>
+                    <th> archivo </th>
+                    <th> cantidad </th>
+                </tr>
+                    {numero_archivos}
+                </table>
+            <h1> Conexion y archivos </h1>
+            {con_arch}
         </body>
-    </html>"#;
+    </html>"#,
+        numero_archivos = numero_archivos,
+        con_arch = conexion_archivos
+    );
 
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
@@ -140,7 +176,10 @@ fn balancear() {
                 .unwrap()
                 .get_connections_without_filename(&nombre);
 
-            println!("conexiones para enviar archivo {} {:?}", nombre, conexiones_viables);
+            println!(
+                "conexiones para enviar archivo {} {:?}",
+                nombre, conexiones_viables
+            );
 
             while diferencia > 0 && conexiones_viables.len() > 0 {
                 let pos = rng.gen_range(0..conexiones_viables.len());
@@ -179,7 +218,6 @@ async fn main() -> std::io::Result<()> {
             .service(connect)
             .service(get_all_files)
             .service(get_dirs_filename)
-        // .route("/hey", web::get().to(manual_hello))
     })
     .bind(ip)?
     .run()
