@@ -22,6 +22,7 @@ lazy_static! {
 // tiempo en segundos para balancear
 pub static TIEMPO_BALANCEO: u64 = 30;
 
+// TODO: usar un porcentaje del total despues de superar el minimo, hasta llegar a un maximo
 pub static PORCENTAJE_DISTRIBUCION: u16 = 20;
 
 pub static MINIMO_NUMERO_ARCHIVOS: u64 = 3;
@@ -31,7 +32,7 @@ fn get_files() -> Vec<DistributedFiles> {
     REGISTRO.lock().unwrap().clone()
 }
 
-/// muestra el registro de archivos que se tiene en el broker
+/// muestra el registro de archivos que se tiene en el dispatcher
 #[get("/getdirs/{filename}")]
 async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Responder {
     let dirs = REGISTRO
@@ -46,7 +47,7 @@ async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Resp
     })
 }
 
-/// muestra el registro de archivos que se tiene en el broker
+/// muestra el registro de archivos que se tiene en el dispatcher
 #[get("/get_files")]
 async fn get_all_files() -> impl Responder {
     let json = serde_json::to_string(&get_files());
@@ -208,6 +209,10 @@ async fn main() -> std::io::Result<()> {
         let mut interval = time::interval(Duration::from_secs(TIEMPO_BALANCEO));
         loop {
             interval.tick().await;
+            // TODO: hacer algo para verificar si los almacenamientos siguen disponibles
+            // se podria hacer un ping a cada uno y en caso de no
+            // responder o tomar mas tiempo del necesario, se elimina
+            // del registro
             balancear();
         }
     });

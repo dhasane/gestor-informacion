@@ -1,24 +1,16 @@
 #![allow(dead_code)]
-
 use std::fs;
 
-use actix_web::Error;
-
 use reqwest::blocking::Response;
-use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::copy;
 use std::time::SystemTime;
-use url::Url;
 
 use crate::communication::connection::Connection;
 
-fn get_file_path(filename: &str, ubicacion: &str) -> String {
-    format!("{}/{}", ubicacion, sanitize_filename::sanitize(filename))
-}
-
-pub fn get_files(ubicacion: String) -> Vec<String> {
-    let paths: Vec<String> = fs::read_dir(ubicacion)
+/// Conseigue los archivos que se encuentran en UBICACION y retorna una lista de strings
+pub fn get_files(dir: String) -> Vec<String> {
+    let paths: Vec<String> = fs::read_dir(dir)
         .unwrap()
         .map(|r| -> String {
             if let Ok(a) = r {
@@ -32,22 +24,16 @@ pub fn get_files(ubicacion: String) -> Vec<String> {
     paths
 }
 
-pub async fn delete_file(file_name: &str, ubicacion: &str) -> Result<(), Error> {
-    let filepath = get_file_path(file_name, ubicacion);
-    Ok(fs::remove_file(filepath)?)
-}
-
-pub fn parse_url(url: &str) -> Result<Url, ()> {
-    match Url::parse(url) {
-        Ok(a) => Ok(a),
-        Err(_) => Err(()),
-    }
-}
+// TODO: crear esto para borrar
+// pub async fn delete_file(file_name: &str, ubicacion: &str) -> Result<(), Error> {
+//     let filepath = get_file_path(file_name, ubicacion);
+//     Ok(fs::remove_file(filepath)?)
+// }
 
 /// Realizar operacion de GET y retornar el resultado.
 /// Realmente solo es para recordar.
-pub fn get(cnt: Connection, endpoint: String) -> Result<Response, ()> {
-    let url = cnt.to_string(endpoint);
+pub fn get(con: Connection, endpoint: String) -> Result<Response, ()> {
+    let url = con.to_string(endpoint);
     println!("{}", url);
     let response;
     match reqwest::blocking::get(url.as_str()) {
@@ -63,37 +49,14 @@ pub fn get(cnt: Connection, endpoint: String) -> Result<Response, ()> {
     Ok(response)
 }
 
-pub fn post(cnt: Connection, endpoint: String, json: Value) -> Result<Response, ()> {
-    // This will POST a body of `foo=bar&baz=quux`
-    // let params = [("foo", "bar"), ("baz", "quux")];
-    let url = cnt.to_string(endpoint);
-
-    println!("post {}", url);
-    let client = reqwest::blocking::Client::new();
-    match client.post(url).json(&json).send() {
-        Ok(a) => Ok(a),
-        Err(err) => {
-            println!("post error: {}", err);
-            Err(())
-        }
-    }
-}
-
+/// Envia por la CONEXION, con el ENDPOINT especificado, la lista de
+/// archivos encontrados en DIR
 pub fn send_files(
-    cnt: &Connection,
+    con: &Connection,
     endpoint: String,
     dir: String,
 ) -> Result<Response, reqwest::Error> {
-    let url = cnt.to_string(endpoint);
-
-    // curl --request POST \
-    //   --url http://127.0.0.1:8080/connect/5050 \
-    //   --header 'Content-Type: application/json' \
-    //   --data '[
-    // 	"A",
-    // 	"b",
-    // 	"c"
-    // ]'
+    let url = con.to_string(endpoint);
 
     let client = reqwest::blocking::Client::new();
     let data = files_as_json(dir);
@@ -112,8 +75,9 @@ pub fn send_files(
     }
 }
 
-pub fn files_as_json(ubicacion: String) -> String {
-    let vec: Vec<String> = get_files(ubicacion);
+/// Convierte los archivos encontrados en DIR en un json
+pub fn files_as_json(dir: String) -> String {
+    let vec: Vec<String> = get_files(dir);
     let json = serde_json::to_string(&vec);
 
     match json {
@@ -123,12 +87,12 @@ pub fn files_as_json(ubicacion: String) -> String {
 }
 
 /// conseguir lista de direcciones viables que contienen un
-/// archivo especifico desde broker
+/// archivo especifico desde el dispatcher
 pub fn pedir_ips_viables(
-    ip_broker: &Connection,
-    nombre_archivo: &str,
+    con_dispatcher: &Connection,
+    file_name: &str,
 ) -> Result<Vec<Connection>, ()> {
-    let url = ip_broker.to_string(format!("getdirs/{}", nombre_archivo));
+    let url = con_dispatcher.to_string(format!("getdirs/{}", file_name));
 
     let respuesta = match reqwest::blocking::get(url) {
         Ok(it) => it,
@@ -156,9 +120,9 @@ pub fn pedir_ips_viables(
 }
 
 /// hacer un ""ping"" a la otra maquina
-pub fn ping(addr: &Connection) -> Result<u128, reqwest::Error> {
+pub fn ping(con: &Connection) -> Result<u128, reqwest::Error> {
     let start = SystemTime::now();
-    let url = addr.to_string(format!("ping"));
+    let url = con.to_string(format!("ping"));
     // solo es para ver el tiempo de respuesta
     // esto actua como "ping"
     let _respuesta: reqwest::blocking::Response = reqwest::blocking::get(url)?;
@@ -187,16 +151,17 @@ fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection 
     ret.to_owned()
 }
 
-pub fn get_file(ip_broker: &Connection, file_name: String, dir: String) -> String {
-    let ips: Vec<Connection> = pedir_ips_viables(ip_broker, &file_name).unwrap();
+pub fn get_file(con_dispatcher: &Connection, file_name: String, dir: String) -> String {
+    let ips: Vec<Connection> = pedir_ips_viables(con_dispatcher, &file_name).unwrap();
 
     if ips.is_empty() {
-        return format!("No se han conseguido direcciones para el archivo {}", file_name);
+        return format!(
+            "No se han conseguido direcciones para el archivo {}",
+            file_name
+        );
     }
 
-    let ips_viables: Vec<Connection> = ips.iter()
-        .map(|f| -> Connection { f.clone() })
-        .collect();
+    let ips_viables: Vec<Connection> = ips.iter().map(|f| -> Connection { f.clone() }).collect();
 
     println!("{:#?}", ips_viables);
 
@@ -214,8 +179,8 @@ pub fn get_file(ip_broker: &Connection, file_name: String, dir: String) -> Strin
     }
 }
 
-pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Result<(), String> {
-    let url = ip.to_string(format!("file/{}", nombre_archivo));
+pub fn download(con: Connection, nombre_archivo: String, ubicacion: String) -> Result<(), String> {
+    let url = con.to_string(format!("file/{}", nombre_archivo));
 
     // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
     let response = match reqwest::blocking::get(url) {
@@ -231,27 +196,24 @@ pub fn download(ip: Connection, nombre_archivo: String, ubicacion: String) -> Re
             .and_then(|name| if name.is_empty() { None } else { Some(name) })
             .unwrap_or("tmp.bin");
 
-        println!("file to download: '{}'", fname);
         let filepath = format!("{dir}/{file}", dir = ubicacion, file = fname);
         match OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .open(filepath)
-        // match File::open(filepath)
         {
             Ok(a) => a,
             Err(e) => return Err(format!("Error creando el archivo: \n {:?}", e)),
         }
     };
     let content = response.text().unwrap();
-    // println!("contenido: {}", content);
     match copy(&mut content.as_bytes(), &mut dest) {
         Ok(_a) => {
             println!(
                 "Descargando archivo {archivo} de {ip} en {ubicacion}",
                 archivo = nombre_archivo,
-                ip = ip,
+                ip = con,
                 ubicacion = ubicacion
             );
 

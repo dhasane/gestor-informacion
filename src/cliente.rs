@@ -4,12 +4,11 @@ use std::env;
 use communication::{connection::Connection, general};
 
 fn main() {
-
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
-        println!("Se debe especificar [ip broker] [puerto broker] [archivo]");
-        return ;
+        println!("Se debe especificar [ip dispatcher] [puerto dispatcher] [archivo]");
+        return;
     }
 
     let dir = format!("archivos-cliente");
@@ -24,5 +23,4 @@ fn main() {
     let filename: String = args[3].to_owned();
 
     general::get_file(&con, filename, dir);
-
 }

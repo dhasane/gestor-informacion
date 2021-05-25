@@ -11,20 +11,23 @@ pub mod communication;
 use connection::Connection;
 
 pub struct Config {
-    pub broker :Connection,
+    /// Conexion al dispatcher
+    pub dispatcher: Connection,
+    /// Directorio en el cual se guardaran los archivos
     pub directorio: String,
+    /// Puerto desde donde se reciben mensajes
     pub puerto: String,
 }
 
 static mut CONFIGURACION: Option<Config> = None;
 
-pub fn set_config(broker:Connection, directorio: String, puerto: String) {
+pub fn set_config(dispatcher: Connection, directorio: String, puerto: String) {
     unsafe {
-        CONFIGURACION = Some(
-            Config {
-                broker,directorio,puerto
-            }
-        )
+        CONFIGURACION = Some(Config {
+            dispatcher,
+            directorio,
+            puerto,
+        })
     }
 }
 
@@ -39,12 +42,12 @@ pub fn get_dir() -> String {
     }
 }
 
-pub fn get_broker_dir() -> &'static Connection {
+pub fn get_dispatcher_dir() -> &'static Connection {
     unsafe {
-        if let Some(config) = &CONFIGURACION{
-            &config.broker
+        if let Some(config) = &CONFIGURACION {
+            &config.dispatcher
         } else {
-            println!("Error consiguiendo conexion a broker, falta configurar");
+            println!("Error consiguiendo conexion a dispatcher, falta configurar");
             process::exit(1);
         }
     }
@@ -52,7 +55,7 @@ pub fn get_broker_dir() -> &'static Connection {
 
 pub fn get_puerto() -> &'static str {
     unsafe {
-        if let Some(config) = &CONFIGURACION{
+        if let Some(config) = &CONFIGURACION {
             &config.puerto
         } else {
             println!("Error consiguiendo puerto, falta configurar");
@@ -61,10 +64,10 @@ pub fn get_puerto() -> &'static str {
     }
 }
 
-/// Se envia el puerto, de forma que el broker sepa por donde responder.
+/// Se envia el puerto, de forma que el dispatcher sepa por donde responder.
 /// Se envian los archivos pertenecientes al almacenamiento local.
 fn enviar_archivos() {
-    let connection = get_broker_dir();
+    let connection = get_dispatcher_dir();
     let port = get_puerto();
     println!("enviando archivos a {}", connection.base_str());
 
@@ -72,8 +75,8 @@ fn enviar_archivos() {
 
     match respuesta {
         Ok(_a) => {
-          println!("archivos enviados exitosamente");
-        },
+            println!("archivos enviados exitosamente");
+        }
         Err(e) => println!("{:?}", e),
     };
 }
@@ -103,19 +106,17 @@ async fn connect(req: HttpRequest) -> impl Responder {
 
 /// Pide al almacenamiento que consiga el archivo file_name
 #[get("go_get_file/{file_name}")]
-async fn go_get_file(
-    web::Path(file_name): web::Path<String>,
-) -> impl Responder {
-
-    if !general::get_files(get_dir()).iter().any(|f| f == &file_name) {
-
-        let ret = general::get_file(get_broker_dir(), file_name, get_dir());
+async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder {
+    if !general::get_files(get_dir())
+        .iter()
+        .any(|f| f == &file_name)
+    {
+        let ret = general::get_file(get_dispatcher_dir(), file_name, get_dir());
         enviar_archivos();
         ret
     } else {
         "no se descargo el archivo".to_string()
     }
-
 }
 
 #[get("file/{file_name}")]
@@ -137,23 +138,22 @@ async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::Named
 
 #[get("/")]
 fn index() -> HttpResponse {
-    let start = r#"<html>
+    let vec: Vec<String> = general::get_files(get_dir());
+
+    let archivos: String = vec.iter().map(|f| format!("<li>{}</li>", f)).collect();
+
+    let html = format!(
+        "<html>
         <head><title>Upload Test</title></head>
         <body>
             <h1> Archivos: </h1>
             <ul>
-        "#;
-
-    let vec: Vec<String> = general::get_files(get_dir());
-
-    let mid: String = vec.iter().map(|f| format!("<li>{}</li>", f)).collect();
-
-    let end = r#"
+                {}
             </ul>
         </body>
-        </html>"#;
-
-    let html = format!("{}{}{}", start, mid, end);
+        </html> ",
+        archivos
+    );
 
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
@@ -165,23 +165,23 @@ async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
-        println!("Se debe especificar [puerto] [ip broker] [puerto broker]");
+        println!("Se debe especificar [puerto] [ip dispatcher] [puerto dispatcher]");
         return Ok(());
     }
 
     let ip = "0.0.0.0";
     let port = &args[1];
 
-    let broker_ip = &args[2];
-    let broker_port = &args[3];
+    let dispatcher_ip = &args[2];
+    let dispatcher_port = &args[3];
 
     set_config(
         Connection {
-            ip: broker_ip.to_owned(),
-            port: broker_port.to_owned(),
+            ip: dispatcher_ip.to_owned(),
+            port: dispatcher_port.to_owned(),
         },
         format!("tmp-{}", port),
-        port.to_owned()
+        port.to_owned(),
     );
 
     std::fs::create_dir_all(get_dir()).unwrap();
