@@ -13,8 +13,8 @@ name = "dispatcher"
 path = "src/dispatcher.rs"
 
 [[bin]]
-name = "almacenamiento"
-path = "src/almacenamiento.rs"
+name = "storage"
+path = "src/storage.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

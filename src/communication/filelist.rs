@@ -30,7 +30,7 @@ impl FileList {
     /// Agrega una conexion y sus archivos al registro.
     /// Puede que haya una manera mas facil, pero de momento esto parece
     /// servir.
-    pub fn agregar_o_reemplazar_conexion(&mut self, con: Connection, files: Vec<String>) {
+    pub fn add_or_replace_connection(&mut self, con: Connection, files: Vec<String>) {
         let accion = format!("{} -> {:?}", con.base_str(), files);
         let dist_file = DistributedFiles {
             conexion: con,

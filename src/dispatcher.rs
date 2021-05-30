@@ -32,9 +32,9 @@ fn get_files() -> Vec<DistributedFiles> {
     REGISTRO.lock().unwrap().clone()
 }
 
-/// muestra el registro de archivos que se tiene en el dispatcher
-#[get("/getdirs/{filename}")]
-async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Responder {
+/// Retorna todas las conexiones en el registro que contengan un archivo especifico.
+#[get("/get_connections/{filename}")]
+async fn get_connections_filename(web::Path(file_name): web::Path<String>) -> impl Responder {
     let dirs = REGISTRO
         .lock()
         .unwrap()
@@ -48,7 +48,7 @@ async fn get_dirs_filename(web::Path(file_name): web::Path<String>) -> impl Resp
 }
 
 /// muestra el registro de archivos que se tiene en el dispatcher
-#[get("/get_files")]
+#[get("/get_all_files")]
 async fn get_all_files() -> impl Responder {
     let json = serde_json::to_string(&get_files());
     HttpResponse::Ok().body(match json {
@@ -60,20 +60,17 @@ async fn get_all_files() -> impl Responder {
 /// Esto es para definir cuando una nueva conexion se genere, de forma
 /// que se pueda guardar la direccion.
 /// Se recibe el puerto por donde se realizara la respuesta.
-#[post("connect/{port}")]
-async fn connect(
+#[post("send_files/{port}")]
+async fn receive_files(
     req: HttpRequest,
     web::Path(port): web::Path<String>,
     json: web::Json<Vec<String>>,
 ) -> impl Responder {
-    let ci = req.connection_info();
-    let mut extra = "".to_string();
+    let con_info = req.connection_info();
 
-    if let Some(a) = ci.remote_addr() {
-        extra = format!("{}", a);
-
+    if let Some(remote_addr) = con_info.remote_addr() {
         let connection = Connection {
-            ip: a[..a.find(':').unwrap()].to_owned(),
+            ip: remote_addr[..remote_addr.find(':').unwrap()].to_owned(),
             port,
         };
 
@@ -82,11 +79,11 @@ async fn connect(
         REGISTRO
             .lock()
             .unwrap()
-            .agregar_o_reemplazar_conexion(connection, archivos);
+            .add_or_replace_connection(connection, archivos);
     } else {
         println!("conexion vacia");
     };
-    format!("conexion: hola {}", extra)
+    format!("hola")
 }
 
 #[get("/")]
@@ -144,8 +141,8 @@ fn index() -> HttpResponse {
         .body(html)
 }
 
-fn go_get(con: Connection, nombre_archivo: &str) {
-    let url = con.to_string(format!("go_get_file/{}", nombre_archivo));
+fn go_get(con: Connection, filename: &str) {
+    let url = con.to_url(format!("go_get_file/{}", filename));
     let respuesta = match reqwest::blocking::get(url) {
         Ok(it) => it.text().unwrap(),
         Err(e) => {
@@ -155,6 +152,8 @@ fn go_get(con: Connection, nombre_archivo: &str) {
     println!("{}", respuesta);
 }
 
+/// Realiza el balanceo de archivos, enviando los archivos que no
+/// tengan suficientes ocurrencias dentro del sistema
 fn balancear() {
     let numero_archivos: Vec<(String, u64)> = REGISTRO.lock().unwrap().get_number_of_files();
     println!("{:?}", numero_archivos);
@@ -220,9 +219,9 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .service(index)
-            .service(connect)
+            .service(receive_files)
             .service(get_all_files)
-            .service(get_dirs_filename)
+            .service(get_connections_filename)
     })
     .bind(ip)?
     .run()

@@ -1,7 +1,7 @@
 mod communication;
 use std::env;
 
-use communication::{connection::Connection, general};
+use communication::connection::Connection;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -22,5 +22,5 @@ fn main() {
 
     let filename: String = args[3].to_owned();
 
-    general::get_file(&con, filename, dir);
+    con.get_file(filename, dir);
 }

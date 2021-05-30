@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, process, time::SystemTime};
 
 use actix_files as fs;
-use actix_web::{get, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{get, App, Error, HttpResponse, HttpServer, Responder};
 use actix_web::{
     http::header::{ContentDisposition, DispositionType},
     web,
@@ -21,7 +21,7 @@ pub struct Config {
 
 static mut CONFIGURACION: Option<Config> = None;
 
-pub fn set_config(dispatcher: Connection, directorio: String, puerto: String) {
+fn set_config(dispatcher: Connection, directorio: String, puerto: String) {
     unsafe {
         CONFIGURACION = Some(Config {
             dispatcher,
@@ -53,7 +53,7 @@ pub fn get_dispatcher_dir() -> &'static Connection {
     }
 }
 
-pub fn get_puerto() -> &'static str {
+pub fn get_port() -> &'static str {
     unsafe {
         if let Some(config) = &CONFIGURACION {
             &config.puerto
@@ -66,12 +66,12 @@ pub fn get_puerto() -> &'static str {
 
 /// Se envia el puerto, de forma que el dispatcher sepa por donde responder.
 /// Se envian los archivos pertenecientes al almacenamiento local.
-fn enviar_archivos() {
+fn send_file_list() {
     let connection = get_dispatcher_dir();
-    let port = get_puerto();
+    let port = get_port();
     println!("enviando archivos a {}", connection.base_str());
 
-    let respuesta = general::send_files(connection, format!("connect/{}", port), get_dir());
+    let respuesta = general::send_files(connection, format!("send_files/{}", port), get_dir());
 
     match respuesta {
         Ok(_a) => {
@@ -81,45 +81,28 @@ fn enviar_archivos() {
     };
 }
 
-#[get("/list_files")]
-async fn list_files() -> impl Responder {
-    format!("{:?}", general::files_as_json(get_dir()))
-}
-
+/// Responde al ""ping""
 #[get("/ping")]
 async fn ping_listener() -> impl Responder {
-    format!("{:?}", SystemTime::now())
-}
-
-#[get("connect")]
-async fn connect(req: HttpRequest) -> impl Responder {
-    let ci = req.connection_info();
-    let mut extra = "".to_string();
-    if let Some(a) = ci.remote_addr() {
-        println!("conexion exitosa: {}", a);
-        extra = format!("{}", a);
-    } else {
-        println!("conexion vacia");
-    }
-    format!("conexion: hola {}", extra)
+    format!("Ping: {:?}", SystemTime::now())
 }
 
 /// Pide al almacenamiento que consiga el archivo file_name
 #[get("go_get_file/{file_name}")]
 async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder {
-    if !general::get_files(get_dir())
+    if !general::get_files_in_dir(get_dir())
         .iter()
         .any(|f| f == &file_name)
     {
-        let ret = general::get_file(get_dispatcher_dir(), file_name, get_dir());
-        enviar_archivos();
+        let ret = get_dispatcher_dir().get_file(file_name, get_dir());
+        send_file_list();
         ret
     } else {
         "no se descargo el archivo".to_string()
     }
 }
 
-#[get("file/{file_name}")]
+#[get("download/{file_name}")]
 async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::NamedFile, Error> {
     let path: std::path::PathBuf =
         PathBuf::from(format!("{dir}/{file}", dir = get_dir(), file = file_name));
@@ -138,7 +121,7 @@ async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::Named
 
 #[get("/")]
 fn index() -> HttpResponse {
-    let vec: Vec<String> = general::get_files(get_dir());
+    let vec: Vec<String> = general::get_files_in_dir(get_dir());
 
     let archivos: String = vec.iter().map(|f| format!("<li>{}</li>", f)).collect();
 
@@ -186,15 +169,13 @@ async fn main() -> std::io::Result<()> {
 
     std::fs::create_dir_all(get_dir()).unwrap();
 
-    enviar_archivos();
+    send_file_list();
 
     let direccion = format!("{ip}:{port}", ip = ip, port = port);
 
     HttpServer::new(|| {
         App::new()
             .service(index)
-            .service(list_files)
-            .service(connect)
             .service(file_serve)
             .service(go_get_file)
             .service(ping_listener)
