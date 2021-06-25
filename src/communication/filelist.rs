@@ -23,8 +23,8 @@ impl FileList {
         }
     }
 
-    pub fn size(&self) -> usize {
-        self.archivos.len()
+    pub fn size(&self) -> u64 {
+        self.archivos.len() as u64
     }
 
     /// Agrega una conexion y sus archivos al registro.

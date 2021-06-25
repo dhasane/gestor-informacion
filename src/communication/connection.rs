@@ -63,25 +63,21 @@ impl Connection {
     }
 
     /// Hacer ping a cada una de las ips y medir el tiempo de cada una
-    /// retornar la ip que responda mas rapido
-    fn get_conexion_mas_cercana(conexiones_posibles: Vec<Connection>) -> Connection {
-        let mut cons = conexiones_posibles
-            .iter()
-            .map(|con| (con, con.ping().unwrap()));
-        // TODO: seria chevere sacar el menor desde aca con min o algo asi
-
-        let algo = cons.next().unwrap();
-
-        let mut ret: &Connection = algo.0;
-        let mut min: u128 = algo.1;
-
-        for con in cons {
-            if con.1 < min {
-                ret = con.0;
-                min = con.1;
-            }
+    /// retornar la ip que responda mas rapido, en caso de recibir una
+    /// lista vacia, se retorna error
+    fn get_conexion_mas_cercana(
+        conexiones_posibles: Vec<Connection>,
+    ) -> Result<Connection, String> {
+        if conexiones_posibles.len() > 0 {
+            Ok(conexiones_posibles
+                .iter()
+                .map(|con| (con.to_owned(), con.ping().unwrap()))
+                .min_by(|con1, con2| con1.1.cmp(&con2.1))
+                .unwrap()
+                .0)
+        } else {
+            Err("Lista vacia".to_string())
         }
-        ret.to_owned()
     }
 
     pub fn get_file(&self, file_name: String, dir: String) -> String {
@@ -99,16 +95,22 @@ impl Connection {
 
         println!("{:#?}", ips_viables);
 
-        let url = Connection::get_conexion_mas_cercana(ips_viables);
+        match Connection::get_conexion_mas_cercana(ips_viables) {
+            Ok(url) => {
+                println!("{:?}", url);
 
-        println!("{:?}", url);
-
-        match url.download(file_name, dir) {
-            Ok(_) => {
-                format!("Archivo descargado")
+                match url.download(file_name, dir) {
+                    Ok(_) => {
+                        format!("Archivo descargado")
+                    }
+                    Err(e) => {
+                        format!("{}", e)
+                    }
+                }
             }
-            Err(e) => {
-                format!("{}", e)
+            Err(err) => {
+                eprint!("Error: {}", err);
+                err
             }
         }
     }
