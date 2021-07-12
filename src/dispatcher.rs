@@ -22,10 +22,11 @@ lazy_static! {
 // tiempo en segundos para balancear
 pub static TIEMPO_BALANCEO: u64 = 30;
 
-// TODO: usar un porcentaje del total despues de superar el minimo, hasta llegar a un maximo
-pub static PORCENTAJE_DISTRIBUCION: u16 = 20;
+// porcentaje del total despues de superar el minimo, hasta llegar a un maximo
+pub static PORCENTAJE_DISTRIBUCION: f64 = 0.5;
 
 pub static MINIMO_NUMERO_ARCHIVOS: u64 = 3;
+pub static MAXIMO_NUMERO_ARCHIVOS: u64 = 20;
 
 // recortar el llamado y evitar que el lock se prolonge
 fn get_files() -> Vec<DistributedFiles> {
@@ -141,6 +142,7 @@ fn index() -> HttpResponse {
         .body(html)
 }
 
+/// Le envia a la Conexion "con" un mensaje, de forma que pueda conseguir el archivo "filename"
 fn go_get(con: Connection, filename: &str) {
     let url = con.to_url(format!("go_get_file/{}", filename));
     let respuesta = match reqwest::blocking::get(url) {
@@ -163,11 +165,18 @@ fn balancear() {
     let mut rng = rand::thread_rng();
 
     for (nombre, cantidad) in numero_archivos {
+        let porc_min = (cantidad_conexiones as f64 * PORCENTAJE_DISTRIBUCION) as u64;
+
+        // TODO: revisar los porcentajes minimos de distribucion de archivos hasta el maximo
         let mut diferencia =
-            if cantidad >= MINIMO_NUMERO_ARCHIVOS || cantidad as usize >= cantidad_conexiones {
+            if cantidad >= MINIMO_NUMERO_ARCHIVOS || cantidad >= cantidad_conexiones {
                 0
-            } else {
+            } else if cantidad < MINIMO_NUMERO_ARCHIVOS {
                 MINIMO_NUMERO_ARCHIVOS - cantidad
+            } else if cantidad < porc_min {
+                porc_min - cantidad
+            } else {
+                0
             };
 
         if diferencia != 0 {

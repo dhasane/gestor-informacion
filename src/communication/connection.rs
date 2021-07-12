@@ -80,14 +80,14 @@ impl Connection {
         }
     }
 
-    pub fn get_file(&self, file_name: String, dir: String) -> String {
+    pub fn get_file(&self, file_name: String, dir: String) -> Result<String, String> {
         let ips: Vec<Connection> = self.pedir_ips_viables(&file_name).unwrap();
 
         if ips.is_empty() {
-            return format!(
+            return Err(format!(
                 "No se han conseguido direcciones para el archivo {}",
                 file_name
-            );
+            ));
         }
 
         let ips_viables: Vec<Connection> =
@@ -100,17 +100,13 @@ impl Connection {
                 println!("{:?}", url);
 
                 match url.download(file_name, dir) {
-                    Ok(_) => {
-                        format!("Archivo descargado")
-                    }
-                    Err(e) => {
-                        format!("{}", e)
-                    }
+                    Ok(_) => Ok(format!("Archivo descargado")),
+                    Err(e) => Err(format!("{}", e)),
                 }
             }
             Err(err) => {
                 eprint!("Error: {}", err);
-                err
+                Err(err)
             }
         }
     }

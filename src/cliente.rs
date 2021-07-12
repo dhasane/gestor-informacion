@@ -22,5 +22,5 @@ fn main() {
 
     let filename: String = args[3].to_owned();
 
-    con.get_file(filename, dir);
+    println!("{}", con.get_file(filename, dir).unwrap());
 }

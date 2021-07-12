@@ -96,7 +96,7 @@ async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder 
     {
         let ret = get_dispatcher_dir().get_file(file_name, get_dir());
         send_file_list();
-        ret
+        ret.unwrap()
     } else {
         "no se descargo el archivo".to_string()
     }
