@@ -11,7 +11,7 @@ fn main() {
         return;
     }
 
-    let dir = format!("archivos-cliente");
+    let dir = "archivos-cliente".to_string();
 
     std::fs::create_dir_all(&dir).unwrap();
 

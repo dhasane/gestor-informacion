@@ -51,9 +51,9 @@ impl FileList {
         self.print();
     }
 
-    /// Retorna una copia del registro de archivos.
-    pub fn clone(&self) -> Vec<DistributedFiles> {
-        self.archivos.to_vec()
+    /// Retorna una copia de la lista de archivos
+    pub fn get_files(&self) -> &Vec<DistributedFiles> {
+        &self.archivos
     }
 
     /// Conseguir todos los archivos en una conexion especifica.

@@ -11,7 +11,7 @@ pub fn get_files_in_dir(dir: String) -> Vec<String> {
         .unwrap()
         .map(|r| -> String {
             if let Ok(a) = r {
-                format!("{}", a.file_name().into_string().unwrap())
+                a.file_name().into_string().unwrap()
             } else {
                 "".to_string()
             }
@@ -29,7 +29,7 @@ pub fn get_files_in_dir(dir: String) -> Vec<String> {
 
 /// Realizar operacion de GET y retornar el resultado.
 /// Realmente solo es para recordar.
-pub fn get(con: Connection, endpoint: String) -> Result<Response, ()> {
+pub fn get(con: Connection, endpoint: String) -> Result<Response, String> {
     let url = con.to_url(endpoint);
     println!("{}", url);
     let response;
@@ -39,7 +39,7 @@ pub fn get(con: Connection, endpoint: String) -> Result<Response, ()> {
         }
         Err(err) => {
             println!("error: {}", err);
-            return Err(());
+            return Err(err.to_string());
         }
     };
 

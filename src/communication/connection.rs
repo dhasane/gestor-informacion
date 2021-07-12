@@ -25,7 +25,7 @@ impl Connection {
     /// hacer un ""ping"" a la otra maquina
     pub fn ping(&self) -> Result<u128, reqwest::Error> {
         let start = SystemTime::now();
-        let url = self.to_url(format!("ping"));
+        let url = self.to_url("ping".to_string());
         // solo es para ver el tiempo de respuesta
         // esto actua como "ping"
         let _respuesta: reqwest::blocking::Response = reqwest::blocking::get(url)?;
@@ -54,7 +54,7 @@ impl Connection {
                 "".to_string()
             }
         };
-        let ret: Vec<Connection> = if json != "" {
+        let ret: Vec<Connection> = if !json.is_empty() {
             serde_json::from_str(&json).unwrap()
         } else {
             vec![]
@@ -68,7 +68,7 @@ impl Connection {
     fn get_conexion_mas_cercana(
         conexiones_posibles: Vec<Connection>,
     ) -> Result<Connection, String> {
-        if conexiones_posibles.len() > 0 {
+        if !conexiones_posibles.is_empty() {
             Ok(conexiones_posibles
                 .iter()
                 .map(|con| (con.to_owned(), con.ping().unwrap()))
@@ -90,18 +90,15 @@ impl Connection {
             ));
         }
 
-        let ips_viables: Vec<Connection> =
-            ips.iter().map(|f| -> Connection { f.clone() }).collect();
+        println!("{:#?}", ips);
 
-        println!("{:#?}", ips_viables);
-
-        match Connection::get_conexion_mas_cercana(ips_viables) {
+        match Connection::get_conexion_mas_cercana(ips) {
             Ok(url) => {
                 println!("{:?}", url);
 
                 match url.download(file_name, dir) {
-                    Ok(_) => Ok(format!("Archivo descargado")),
-                    Err(e) => Err(format!("{}", e)),
+                    Ok(_) => Ok("Archivo descargado".to_string()),
+                    Err(e) => Err(e),
                 }
             }
             Err(err) => {
@@ -154,6 +151,8 @@ impl Connection {
             Err(e) => return Err(format!("Error: {:?}", e)),
         }
     }
+
+    // TODO: hacer upload, de forma que se puedan agregar archivos nuevos al sistema con facilidad
 }
 
 impl fmt::Display for Connection {

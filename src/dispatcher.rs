@@ -5,9 +5,8 @@ use actix_web::{
 };
 use std::{env, time::Duration};
 extern crate serde;
-use communication::{connection, distributedfiles, filelist};
+use communication::{connection, filelist};
 use connection::Connection;
-use distributedfiles::DistributedFiles;
 use filelist::FileList;
 use lazy_static::lazy_static;
 use rand::Rng;
@@ -28,11 +27,6 @@ pub static PORCENTAJE_DISTRIBUCION: f64 = 0.5;
 pub static MINIMO_NUMERO_ARCHIVOS: u64 = 3;
 pub static MAXIMO_NUMERO_ARCHIVOS: u64 = 20;
 
-// recortar el llamado y evitar que el lock se prolonge
-fn get_files() -> Vec<DistributedFiles> {
-    REGISTRO.lock().unwrap().clone()
-}
-
 /// Retorna todas las conexiones en el registro que contengan un archivo especifico.
 #[get("/get_connections/{filename}")]
 async fn get_connections_filename(web::Path(file_name): web::Path<String>) -> impl Responder {
@@ -51,7 +45,7 @@ async fn get_connections_filename(web::Path(file_name): web::Path<String>) -> im
 /// muestra el registro de archivos que se tiene en el dispatcher
 #[get("/get_all_files")]
 async fn get_all_files() -> impl Responder {
-    let json = serde_json::to_string(&get_files());
+    let json = serde_json::to_string(REGISTRO.lock().unwrap().get_files());
     HttpResponse::Ok().body(match json {
         Ok(it) => it,
         Err(_) => "".to_string(),
@@ -84,7 +78,7 @@ async fn receive_files(
     } else {
         println!("conexion vacia");
     };
-    format!("hola")
+    "hola".to_string()
 }
 
 #[get("/")]
@@ -102,7 +96,7 @@ fn index() -> HttpResponse {
     let conexion_archivos: String = REGISTRO
         .lock()
         .unwrap()
-        .clone()
+        .get_files()
         .iter()
         .map(|distrib_file| -> String {
             format!(
@@ -142,7 +136,7 @@ fn index() -> HttpResponse {
         .body(html)
 }
 
-/// Le envia a la Conexion "con" un mensaje, de forma que pueda conseguir el archivo "filename"
+/// Pedir a CON, que vaya y consiga el archivo FILENAME
 fn go_get(con: Connection, filename: &str) {
     let url = con.to_url(format!("go_get_file/{}", filename));
     let respuesta = match reqwest::blocking::get(url) {
@@ -190,7 +184,7 @@ fn balancear() {
                 nombre, conexiones_viables
             );
 
-            while diferencia > 0 && conexiones_viables.len() > 0 {
+            while diferencia > 0 && !conexiones_viables.is_empty() {
                 let pos = rng.gen_range(0..conexiones_viables.len());
 
                 let conexion: Connection = conexiones_viables.remove(pos);
@@ -209,7 +203,9 @@ fn balancear() {
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let port = if args.len() < 1 { &args[1] } else { "8080" };
+    let port = if !args.is_empty() { &args[1] } else { "8080" };
+
+    println!("iniciando dispatcher en puerto {}", port);
 
     let ip = format!("0.0.0.0:{port}", port = port);
 
