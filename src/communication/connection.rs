@@ -12,7 +12,7 @@ pub struct Connection {
 }
 
 impl Connection {
-    /// Cadena base
+    /// Cadena base que representa a la conexion
     pub fn base_str(&self) -> String {
         format!("{}:{}", self.ip, self.port)
     }
@@ -65,13 +65,13 @@ impl Connection {
     /// Hacer ping a cada una de las ips y medir el tiempo de cada una
     /// retornar la ip que responda mas rapido, en caso de recibir una
     /// lista vacia, se retorna error
-    fn get_conexion_mas_cercana(
-        conexiones_posibles: Vec<Connection>,
-    ) -> Result<Connection, String> {
+    fn get_conexion_mas_cercana<'a>(
+        conexiones_posibles: &'a Vec<Connection>,
+    ) -> Result<&'a Connection, String> {
         if !conexiones_posibles.is_empty() {
             Ok(conexiones_posibles
                 .iter()
-                .map(|con| (con.to_owned(), con.ping().unwrap()))
+                .map(|con| (con, con.ping().unwrap()))
                 .min_by(|con1, con2| con1.1.cmp(&con2.1))
                 .unwrap()
                 .0)
@@ -80,6 +80,9 @@ impl Connection {
         }
     }
 
+    /// de las conexiones posibles, se elige la que responda mas
+    /// rapido, y a esta se le pide el archivo FILE_NAME, este se
+    /// descarga en la carpeta DIR
     pub fn get_file(&self, file_name: String, dir: String) -> Result<String, String> {
         let ips: Vec<Connection> = self.pedir_ips_viables(&file_name).unwrap();
 
@@ -92,14 +95,10 @@ impl Connection {
 
         println!("{:#?}", ips);
 
-        match Connection::get_conexion_mas_cercana(ips) {
+        match Connection::get_conexion_mas_cercana(&ips) {
             Ok(url) => {
                 println!("{:?}", url);
-
-                match url.download(file_name, dir) {
-                    Ok(_) => Ok("Archivo descargado".to_string()),
-                    Err(e) => Err(e),
-                }
+                url.download(file_name, dir)
             }
             Err(err) => {
                 eprint!("Error: {}", err);
@@ -108,7 +107,8 @@ impl Connection {
         }
     }
 
-    pub fn download(&self, file_name: String, ubicacion: String) -> Result<(), String> {
+    /// Descargarga el archivo FILE_NAME en la carpeta PATH
+    pub fn download(&self, file_name: String, path: String) -> Result<String, String> {
         let url = self.to_url(format!("download/{}", file_name));
 
         // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
@@ -125,7 +125,7 @@ impl Connection {
                 .and_then(|name| if name.is_empty() { None } else { Some(name) })
                 .unwrap_or("tmp.bin");
 
-            let filepath = format!("{dir}/{file}", dir = ubicacion, file = fname);
+            let filepath = format!("{dir}/{file}", dir = path, file = fname);
             match OpenOptions::new()
                 .read(true)
                 .write(true)
@@ -138,17 +138,13 @@ impl Connection {
         };
         let content = response.text().unwrap();
         match copy(&mut content.as_bytes(), &mut dest) {
-            Ok(_a) => {
-                println!(
-                    "Descargando archivo {archivo} de {ip} en {ubicacion}",
-                    archivo = file_name,
-                    ip = self,
-                    ubicacion = ubicacion
-                );
-
-                Ok(())
-            }
-            Err(e) => return Err(format!("Error: {:?}", e)),
+            Ok(_a) => Ok(format!(
+                "Archivo {archivo} de {ip} descargado en {ubicacion}",
+                archivo = file_name,
+                ip = self,
+                ubicacion = path
+            )),
+            Err(e) => Err(format!("Error: {:?}", e)),
         }
     }
 

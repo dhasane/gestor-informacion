@@ -5,7 +5,9 @@ use reqwest::blocking::Response;
 
 use crate::communication::connection::Connection;
 
-/// Conseigue los archivos que se encuentran en UBICACION y retorna una lista de strings
+/// Consigue los archivos que se encuentran en DIR y retorna una lista
+/// de strings, los cuales representan a los archivos en este
+/// directorio
 pub fn get_files_in_dir(dir: String) -> Vec<String> {
     let paths: Vec<String> = fs::read_dir(dir)
         .unwrap()

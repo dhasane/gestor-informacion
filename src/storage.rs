@@ -42,7 +42,7 @@ pub fn get_dir() -> String {
     }
 }
 
-pub fn get_dispatcher_dir() -> &'static Connection {
+pub fn get_dispatcher_con() -> &'static Connection {
     unsafe {
         if let Some(config) = &CONFIGURACION {
             &config.dispatcher
@@ -67,7 +67,7 @@ pub fn get_port() -> &'static str {
 /// Se envia el puerto, de forma que el dispatcher sepa por donde responder.
 /// Se envian los archivos pertenecientes al almacenamiento local.
 fn send_file_list() {
-    let connection = get_dispatcher_dir();
+    let connection = get_dispatcher_con();
     let port = get_port();
     println!("enviando archivos a {}", connection.base_str());
 
@@ -90,13 +90,14 @@ async fn ping_listener() -> impl Responder {
 /// Pide al almacenamiento que consiga el archivo file_name
 #[get("go_get_file/{file_name}")]
 async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder {
+    // revisar si no se tiene ya el archivo
     if !general::get_files_in_dir(get_dir())
         .iter()
         .any(|f| f == &file_name)
     {
-        let ret = get_dispatcher_dir().get_file(file_name, get_dir());
+        let result = get_dispatcher_con().get_file(file_name, get_dir());
         send_file_list();
-        ret.unwrap()
+        result.unwrap()
     } else {
         "no se descargo el archivo".to_string()
     }
