@@ -24,7 +24,7 @@ fn main() {
 
     // println!("{}", con.get_file(filename, dir).unwrap());
 
-    println!("{}", con.upload(&filename).unwrap());
+    println!("{}", con.put_file(&filename, 4).unwrap());
 
     // TODO: poner para que se pueda tener una opcion para elegir entre cargar y descargar
 }

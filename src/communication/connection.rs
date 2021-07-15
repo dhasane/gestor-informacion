@@ -33,9 +33,9 @@ impl Connection {
         Ok(start.elapsed().unwrap().as_millis())
     }
 
-    /// conseguir lista de direcciones viables que contienen un
+    /// conseguir lista de conexiones viables que contienen un
     /// archivo especifico desde el dispatcher
-    fn pedir_ips_viables(&self, file_name: &str) -> Result<Vec<Connection>, String> {
+    fn pedir_conexiones_viables(&self, file_name: &str) -> Result<Vec<Connection>, String> {
         let url = self.to_url(format!("get_connections/{}", file_name));
 
         let respuesta = match reqwest::blocking::get(url) {
@@ -54,12 +54,31 @@ impl Connection {
         })
     }
 
-    /// Hacer ping a cada una de las ips y medir el tiempo de cada una
+    /// Conseguir lista de conexiones de forma aleatoria.
+    /// CANTIDAD es el numero de conexiones a pedir al dispatcher
+    fn pedir_conexiones_aleatorias(&self, cantidad: u32) -> Result<Vec<Connection>, String> {
+        let url = self.to_url(format!("get_random_connections/{}", cantidad));
+
+        let respuesta = match reqwest::blocking::get(url) {
+            Ok(it) => it,
+            Err(e) => {
+                return Err(format!("Error de conexion:\n{:?}", e));
+            }
+        };
+
+        Ok(match respuesta.text() {
+            Ok(a) => serde_json::from_str(&a).unwrap(),
+            Err(e) => {
+                eprintln!("{}", e);
+                vec![]
+            }
+        })
+    }
+
+    /// Hacer ping a cada una de las conexiones y medir el tiempo de cada una
     /// retornar la ip que responda mas rapido, en caso de recibir una
     /// lista vacia, se retorna error
-    fn get_conexion_mas_cercana<'a>(
-        conexiones_posibles: &'a Vec<Connection>,
-    ) -> Result<&'a Connection, String> {
+    fn get_conexion_mas_cercana(conexiones_posibles: &[Connection]) -> Result<&Connection, String> {
         if !conexiones_posibles.is_empty() {
             Ok(conexiones_posibles
                 .iter()
@@ -75,19 +94,19 @@ impl Connection {
     /// de las conexiones posibles, se elige la que responda mas
     /// rapido, y a esta se le pide el archivo FILE_NAME, este se
     /// descarga en la carpeta DIR
-    pub fn get_file(&self, file_name: String, dir: String) -> Result<String, String> {
-        let ips: Vec<Connection> = self.pedir_ips_viables(&file_name).unwrap();
+    pub fn get_file(&self, file_name: &str, dir: &str) -> Result<String, String> {
+        let conexiones: Vec<Connection> = self.pedir_conexiones_viables(file_name).unwrap();
 
-        if ips.is_empty() {
+        if conexiones.is_empty() {
             return Err(format!(
                 "No se han conseguido conexiones para el archivo {}",
                 file_name
             ));
         }
 
-        println!("{:#?}", ips);
+        println!("{:#?}", conexiones);
 
-        match Connection::get_conexion_mas_cercana(&ips) {
+        match Connection::get_conexion_mas_cercana(&conexiones) {
             Ok(url) => {
                 println!("{:?}", url);
                 url.download(file_name, dir)
@@ -100,7 +119,7 @@ impl Connection {
     }
 
     /// Descargarga el archivo FILE_NAME en la carpeta PATH
-    pub fn download(&self, file_name: String, path: String) -> Result<String, String> {
+    pub fn download(&self, file_name: &str, path: &str) -> Result<String, String> {
         let url = self.to_url(format!("download/{}", file_name));
 
         // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
@@ -137,6 +156,31 @@ impl Connection {
                 ubicacion = path
             )),
             Err(e) => Err(format!("Error: {:?}", e)),
+        }
+    }
+
+    /// de las conexiones posibles, se elige la que responda mas
+    /// rapido, y a esta se le envia el archivo FILE_NAME.
+    /// Se piden CANTIDAD conexiones al dispatcher para probar los
+    /// tiempos de respuesta.
+    pub fn put_file(&self, file_path: &str, cantidad: u32) -> Result<String, String> {
+        let conexiones: Vec<Connection> = self.pedir_conexiones_aleatorias(cantidad).unwrap();
+
+        if conexiones.is_empty() {
+            return Err("No se han conseguido conexiones".to_string());
+        }
+
+        println!("{:#?}", conexiones);
+
+        match Connection::get_conexion_mas_cercana(&conexiones) {
+            Ok(url) => {
+                println!("{:?}", url);
+                url.upload(file_path)
+            }
+            Err(err) => {
+                eprint!("Error: {}", err);
+                Err(err)
+            }
         }
     }
 

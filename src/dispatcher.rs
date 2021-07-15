@@ -9,7 +9,7 @@ use communication::{connection, filelist};
 use connection::Connection;
 use filelist::FileList;
 use lazy_static::lazy_static;
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
 use std::sync::{Arc, Mutex};
 
 pub mod communication;
@@ -30,12 +30,28 @@ pub static MAXIMO_NUMERO_ARCHIVOS: u64 = 20;
 /// Retorna todas las conexiones en el registro que contengan un archivo especifico.
 #[get("/get_connections/{filename}")]
 async fn get_connections_filename(web::Path(file_name): web::Path<String>) -> impl Responder {
-    let dirs = REGISTRO
+    let dirs: Vec<Connection> = REGISTRO
         .lock()
         .unwrap()
         .get_connections_by_filename(&file_name);
 
     let json = serde_json::to_string(&dirs);
+    HttpResponse::Ok().body(match json {
+        Ok(it) => it,
+        Err(e) => e.to_string(),
+    })
+}
+
+#[get("/get_random_connections/{number}")]
+async fn get_connections(web::Path(number): web::Path<usize>) -> impl Responder {
+    let dirs: Vec<Connection> = REGISTRO.lock().unwrap().get_connections();
+
+    let rnd_values: Vec<Connection> = dirs
+        .choose_multiple(&mut rand::thread_rng(), number)
+        .cloned()
+        .collect();
+
+    let json = serde_json::to_string(&rnd_values);
     HttpResponse::Ok().body(match json {
         Ok(it) => it,
         Err(e) => e.to_string(),
@@ -137,7 +153,7 @@ fn index() -> HttpResponse {
 }
 
 /// Pedir a CON, que vaya y consiga el archivo FILENAME
-fn go_get(con: Connection, filename: &str) {
+fn go_get(con: &Connection, filename: &str) {
     let url = con.to_url(format!("go_get_file/{}", filename));
     let respuesta = match reqwest::blocking::get(url) {
         Ok(it) => it.text().unwrap(),
@@ -190,7 +206,7 @@ fn balancear() {
                 let conexion: Connection = conexiones_viables.remove(pos);
 
                 println!("{} <- {}", conexion, nombre);
-                go_get(conexion, &nombre);
+                go_get(&conexion, &nombre);
 
                 diferencia -= 1;
             }
@@ -203,7 +219,7 @@ fn balancear() {
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let port = if !args.is_empty() { &args[1] } else { "8080" };
+    let port = if args.len() > 1 { &args[1] } else { "8080" };
 
     println!("iniciando dispatcher en puerto {}", port);
 
@@ -227,6 +243,7 @@ async fn main() -> std::io::Result<()> {
             .service(receive_files)
             .service(get_all_files)
             .service(get_connections_filename)
+            .service(get_connections)
     })
     .bind(ip)?
     .run()

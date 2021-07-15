@@ -100,7 +100,7 @@ async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder 
         .iter()
         .any(|f| f == &file_name)
     {
-        let result = get_dispatcher_con().get_file(file_name, get_dir());
+        let result = get_dispatcher_con().get_file(&file_name, &get_dir());
         send_file_list();
         result.unwrap()
     } else {
@@ -110,12 +110,15 @@ async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder 
 
 #[get("download/{file_name}")]
 async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::NamedFile, Error> {
-    let path: std::path::PathBuf =
-        PathBuf::from(format!("{dir}/{file}", dir = get_dir(), file = file_name));
+    let path: std::path::PathBuf = PathBuf::from(format!(
+        "{dir}/{file}",
+        dir = get_dir(),
+        file = sanitize_filename::sanitize(&file_name)
+    ));
     println!("{:?}", path);
     let file = fs::NamedFile::open(path)?;
 
-    println!("Se descarga archivo {file}", file = file_name);
+    println!("Se descarga archivo: {file}", file = file_name);
 
     Ok(file
         .use_last_modified(true)
@@ -150,6 +153,7 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
             f = web::block(move || f.write_all(&data).map(|_| f)).await?;
         }
     }
+    send_file_list();
     Ok(HttpResponse::Ok().into())
 }
 

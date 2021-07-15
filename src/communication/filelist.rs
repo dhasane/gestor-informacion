@@ -59,18 +59,32 @@ impl FileList {
     /// Conseguir todos los archivos en una conexion especifica.
     /// En caso de no encontrar la conexion, retorna un vector vacio.
     /// Retorna una copia de la lista de archivos de la conexion.
-    pub fn get_filenames_by_connection(&self, ip: &str, port: &str) -> Vec<String> {
-        let archivos: &Vec<DistributedFiles> = &self.archivos;
+    pub fn get_filenames_by_connection(
+        &self,
+        ip: &str,
+        port: &str,
+    ) -> Result<&Vec<String>, String> {
+        let archivos: &Vec<DistributedFiles> = self.get_files();
         match archivos.iter().find(|&df| df.comp(ip, port)) {
-            Some(f) => f.archivos.clone(),
-            None => vec![],
+            Some(f) => Ok(&f.archivos),
+            None => Err("Conexion no encontrada".to_string()),
         }
     }
 
     /// Conseguir todas las conexiones que contienen un archivo especifico.
     /// Retorna una copia de la lista conexiones.
+    pub fn get_connections(&self) -> Vec<Connection> {
+        let archivos: &Vec<DistributedFiles> = &self.get_files();
+        archivos
+            .iter()
+            .map(|f| -> Connection { f.conexion.clone() })
+            .collect()
+    }
+
+    /// Conseguir todas las conexiones que contienen un archivo especifico.
+    /// Retorna una copia de la lista conexiones.
     pub fn get_connections_by_filename(&self, nombre: &str) -> Vec<Connection> {
-        let archivos: &Vec<DistributedFiles> = &self.archivos;
+        let archivos: &Vec<DistributedFiles> = &self.get_files();
         archivos
             .iter()
             .filter(|&df| df.archivos.iter().any(|f| -> bool { f == nombre }))
@@ -81,7 +95,7 @@ impl FileList {
     /// Conseguir todas las conexiones que no contienen un archivo especifico.
     /// Retorna una copia de la lista conexiones.
     pub fn get_connections_without_filename(&self, nombre: &str) -> Vec<Connection> {
-        let archivos: &Vec<DistributedFiles> = &self.archivos;
+        let archivos: &Vec<DistributedFiles> = &self.get_files();
 
         archivos
             .iter()
@@ -93,7 +107,7 @@ impl FileList {
     /// Conseguir todas las conexiones que no contienen un archivo especifico.
     /// Retorna una copia de la lista conexiones.
     pub fn get_number_of_files(&self) -> Vec<(String, u64)> {
-        let archivos_dist: &Vec<DistributedFiles> = &self.archivos;
+        let archivos_dist: &Vec<DistributedFiles> = &self.get_files();
         let mut numero_archivos: HashMap<String, u64> = HashMap::new();
 
         for archivo in archivos_dist {
