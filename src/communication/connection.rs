@@ -1,3 +1,4 @@
+use reqwest::blocking::multipart;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs::OpenOptions;
@@ -34,32 +35,23 @@ impl Connection {
 
     /// conseguir lista de direcciones viables que contienen un
     /// archivo especifico desde el dispatcher
-    fn pedir_ips_viables(&self, file_name: &str) -> Result<Vec<Connection>, ()> {
+    fn pedir_ips_viables(&self, file_name: &str) -> Result<Vec<Connection>, String> {
         let url = self.to_url(format!("get_connections/{}", file_name));
 
         let respuesta = match reqwest::blocking::get(url) {
             Ok(it) => it,
             Err(e) => {
-                println!("Error de conexion:\n{:?}", e);
-                return Err(());
+                return Err(format!("Error de conexion:\n{:?}", e));
             }
         };
 
-        let texto = respuesta.text();
-
-        let json = match texto {
-            Ok(a) => a,
+        Ok(match respuesta.text() {
+            Ok(a) => serde_json::from_str(&a).unwrap(),
             Err(e) => {
-                println!("{:?}", e);
-                "".to_string()
+                eprintln!("{}", e);
+                vec![]
             }
-        };
-        let ret: Vec<Connection> = if !json.is_empty() {
-            serde_json::from_str(&json).unwrap()
-        } else {
-            vec![]
-        };
-        Ok(ret)
+        })
     }
 
     /// Hacer ping a cada una de las ips y medir el tiempo de cada una
@@ -88,7 +80,7 @@ impl Connection {
 
         if ips.is_empty() {
             return Err(format!(
-                "No se han conseguido direcciones para el archivo {}",
+                "No se han conseguido conexiones para el archivo {}",
                 file_name
             ));
         }
@@ -148,7 +140,23 @@ impl Connection {
         }
     }
 
-    // TODO: hacer upload, de forma que se puedan agregar archivos nuevos al sistema con facilidad
+    // TODO: hacer el equivalente de get_file
+    pub fn upload(&self, file_path: &str) -> Result<String, String> {
+        match multipart::Form::new().file("file", file_path) {
+            Ok(form) => {
+                let client = reqwest::blocking::Client::new();
+                match client
+                    .post(self.to_url("upload".to_string()))
+                    .multipart(form)
+                    .send()
+                {
+                    Ok(_) => Ok("upload exitoso".to_string()),
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            Err(e) => Err(e.to_string()),
+        }
+    }
 }
 
 impl fmt::Display for Connection {

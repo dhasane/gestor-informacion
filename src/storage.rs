@@ -1,14 +1,19 @@
 use std::{env, path::PathBuf, process, time::SystemTime};
 
 use actix_files as fs;
-use actix_web::{get, App, Error, HttpResponse, HttpServer, Responder};
+use actix_multipart::Multipart;
 use actix_web::{
+    get,
     http::header::{ContentDisposition, DispositionType},
-    web,
+    post, web, App, Error, HttpResponse, HttpServer, Responder,
 };
 use communication::{connection, general};
 pub mod communication;
 use connection::Connection;
+
+use std::io::Write;
+
+use futures::{StreamExt, TryStreamExt};
 
 pub struct Config {
     /// Conexion al dispatcher
@@ -120,6 +125,34 @@ async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::Named
         }))
 }
 
+// https://github.com/actix/examples/blob/a66c05448eace8b1ea53c7495b27604e7e91281c/forms/multipart/src/main.rs
+#[post("upload")]
+async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
+    // iterate over multipart stream
+    while let Ok(Some(mut field)) = payload.try_next().await {
+        let content_type = field.content_disposition().unwrap();
+        let filename = content_type.get_filename().unwrap();
+        let filepath = format!(
+            "./{dir}/{path}",
+            dir = get_dir(),
+            path = sanitize_filename::sanitize(&filename)
+        );
+
+        // File::create is blocking operation, use threadpool
+        let mut f = web::block(|| std::fs::File::create(filepath))
+            .await
+            .unwrap();
+
+        // Field in turn is stream of *Bytes* object
+        while let Some(chunk) = field.next().await {
+            let data = chunk.unwrap();
+            // filesystem operations are blocking, we have to use threadpool
+            f = web::block(move || f.write_all(&data).map(|_| f)).await?;
+        }
+    }
+    Ok(HttpResponse::Ok().into())
+}
+
 #[get("/")]
 fn index() -> HttpResponse {
     let vec: Vec<String> = general::get_files_in_dir(get_dir());
@@ -180,6 +213,7 @@ async fn main() -> std::io::Result<()> {
             .service(file_serve)
             .service(go_get_file)
             .service(ping_listener)
+            .service(upload)
     })
     .bind(direccion)?
     .run()

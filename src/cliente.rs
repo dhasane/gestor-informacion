@@ -22,5 +22,9 @@ fn main() {
 
     let filename: String = args[3].to_owned();
 
-    println!("{}", con.get_file(filename, dir).unwrap());
+    // println!("{}", con.get_file(filename, dir).unwrap());
+
+    println!("{}", con.upload(&filename).unwrap());
+
+    // TODO: poner para que se pueda tener una opcion para elegir entre cargar y descargar
 }
