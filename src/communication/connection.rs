@@ -1,9 +1,10 @@
-use reqwest::blocking::multipart;
 use serde::{Deserialize, Serialize};
-use std::fs::OpenOptions;
-use std::io::{copy, Write};
-use std::time::SystemTime;
-use std::{fmt, fs};
+use std::fmt;
+
+use super::{
+    filesystem,
+    network::{self, Error, Response},
+};
 
 /// Representa una conexion, contiene ip y puerto.
 #[derive(Deserialize, Serialize, Clone)]
@@ -18,61 +19,11 @@ impl Connection {
         format!("{}:{}", self.ip, self.port)
     }
 
-    /// Cadena como url
-    pub fn to_url(&self, cad: String) -> String {
-        format!("http://{}/{}", self.base_str(), cad)
-    }
-
-    /// hacer un ""ping"" a la otra maquina
-    pub fn ping(&self) -> Result<u128, reqwest::Error> {
-        let start = SystemTime::now();
-        let url = self.to_url("ping".to_string());
-        // solo es para ver el tiempo de respuesta
-        // esto actua como "ping"
-        let _respuesta: reqwest::blocking::Response = reqwest::blocking::get(url)?;
-        Ok(start.elapsed().unwrap().as_millis())
-    }
-
-    /// conseguir lista de conexiones viables que contienen un
-    /// archivo especifico desde el dispatcher
-    fn pedir_conexiones_viables(&self, file_name: &str) -> Result<Vec<Connection>, String> {
-        let url = self.to_url(format!("get_connections/{}", file_name));
-
-        let respuesta = match reqwest::blocking::get(url) {
-            Ok(it) => it,
-            Err(e) => {
-                return Err(format!("Error de conexion:\n{:?}", e));
-            }
-        };
-
-        Ok(match respuesta.text() {
-            Ok(a) => serde_json::from_str(&a).unwrap(),
-            Err(e) => {
-                eprintln!("{}", e);
-                vec![]
-            }
-        })
-    }
-
-    /// Conseguir lista de conexiones de forma aleatoria.
-    /// CANTIDAD es el numero de conexiones a pedir al dispatcher
-    fn pedir_conexiones_aleatorias(&self, cantidad: u32) -> Result<Vec<Connection>, String> {
-        let url = self.to_url(format!("get_random_connections/{}", cantidad));
-
-        let respuesta = match reqwest::blocking::get(url) {
-            Ok(it) => it,
-            Err(e) => {
-                return Err(format!("Error de conexion:\n{:?}", e));
-            }
-        };
-
-        Ok(match respuesta.text() {
-            Ok(a) => serde_json::from_str(&a).unwrap(),
-            Err(e) => {
-                eprintln!("{}", e);
-                vec![]
-            }
-        })
+    /// Descarga el archivo FILE_NAME en la carpeta PATH.
+    /// Esto funciona unicamente dentro del sistema.
+    pub fn download(&self, file_name: &str, path: &str) -> Result<String, String> {
+        let url = self.to_url(format!("download/{}", file_name));
+        network::download_url(&url, path)
     }
 
     /// Hacer ping a cada una de las conexiones y medir el tiempo de cada una
@@ -82,7 +33,7 @@ impl Connection {
         if !conexiones_posibles.is_empty() {
             Ok(conexiones_posibles
                 .iter()
-                .map(|con| (con, con.ping().unwrap()))
+                .map(|con| (con, network::ping(&con.to_url("ping".to_string())).unwrap()))
                 .min_by(|con1, con2| con1.1.cmp(&con2.1))
                 .unwrap()
                 .0)
@@ -118,53 +69,18 @@ impl Connection {
         }
     }
 
-    /// Descarga el archivo FILE_NAME en la carpeta PATH.
-    /// Esto funciona unicamente dentro del sistema.
-    pub fn download(&self, file_name: &str, path: &str) -> Result<String, String> {
-        let url = self.to_url(format!("download/{}", file_name));
-        Connection::download_url(&url, path)
+    /// Conseguir lista de conexiones de forma aleatoria.
+    /// CANTIDAD es el numero de conexiones a pedir al dispatcher
+    fn pedir_conexiones_aleatorias(&self, cantidad: u32) -> Result<Vec<Connection>, String> {
+        let url = self.to_url(format!("get_random_connections/{}", cantidad));
+        network::get_as_json(&url)
     }
 
-    /// Descarga el documento encontrado en URL en la direccion PATH.
-    /// Puede llamar urls externas al sistema.
-    pub fn download_url(url: &str, path: &str) -> Result<String, String> {
-        // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
-        let response = match reqwest::blocking::get(url) {
-            Ok(it) => it,
-            Err(e) => return Err(format!("Error de conexion:\n{:?}", e)),
-        };
-
-        let mut dest = {
-            let fname = response
-                .url()
-                .path_segments()
-                .and_then(|segments| segments.last())
-                .and_then(|name| if name.is_empty() { None } else { Some(name) })
-                .unwrap_or("tmp.bin");
-
-            let filepath = format!("{dir}/{file}", dir = path, file = fname);
-            match OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(filepath)
-            {
-                Ok(a) => a,
-                Err(e) => return Err(format!("Error creando el archivo: \n {:?}", e)),
-            }
-        };
-        let content = response.bytes().unwrap();
-
-        // match fs::write(dest, &content) {
-        match dest.write(&content) {
-            Ok(_a) => Ok(format!(
-                "Archivo {archivo:?} de {ip} descargado en {ubicacion}",
-                archivo = dest,
-                ip = url,
-                ubicacion = path
-            )),
-            Err(e) => Err(format!("Error: {:?}", e)),
-        }
+    /// conseguir lista de conexiones viables que contienen un
+    /// archivo especifico desde el dispatcher
+    fn pedir_conexiones_viables(&self, file_name: &str) -> Result<Vec<Connection>, String> {
+        let url = self.to_url(format!("get_connections/{}", file_name));
+        network::get_as_json(&url)
     }
 
     /// de las conexiones posibles, se elige la que responda mas
@@ -192,20 +108,32 @@ impl Connection {
         }
     }
 
-    // TODO: hacer el equivalente de get_file
-    pub fn upload(&self, file_path: &str) -> Result<String, String> {
-        match multipart::Form::new().file("file", file_path) {
-            Ok(form) => {
-                let client = reqwest::blocking::Client::new();
-                match client
-                    .post(self.to_url("upload".to_string()))
-                    .multipart(form)
-                    .send()
-                {
-                    Ok(_) => Ok("upload exitoso".to_string()),
-                    Err(e) => Err(e.to_string()),
-                }
+    /// Envia por la CONEXION, con el ENDPOINT especificado, la lista de
+    /// archivos encontrados en DIR
+    pub fn send_files(&self, endpoint: String, dir: String) -> Result<Response, Error> {
+        let url = self.to_url(endpoint);
+        let data = filesystem::files_as_json(dir);
+
+        match network::post_json(&url, data) {
+            Ok(a) => Ok(a),
+            Err(err) => {
+                println!("post error: {}", err);
+                Err(err)
             }
+        }
+    }
+
+    /// Cadena como url
+    pub fn to_url(&self, cad: String) -> String {
+        format!("http://{}/{}", self.base_str(), cad)
+    }
+
+    pub fn upload(&self, file_path: &str) -> Result<String, String> {
+        match network::Form::new().file("file", file_path) {
+            Ok(form) => match network::send_multipart(&self.to_url("upload".to_string()), form) {
+                Ok(_) => Ok("upload exitoso".to_string()),
+                Err(e) => Err(e.to_string()),
+            },
             Err(e) => Err(e.to_string()),
         }
     }

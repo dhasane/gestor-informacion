@@ -12,6 +12,8 @@ use lazy_static::lazy_static;
 use rand::{seq::SliceRandom, Rng};
 use std::sync::{Arc, Mutex};
 
+use crate::communication::network;
+
 pub mod communication;
 
 lazy_static! {
@@ -155,7 +157,7 @@ fn index() -> HttpResponse {
 /// Pedir a CON, que vaya y consiga el archivo FILENAME
 fn go_get(con: &Connection, filename: &str) {
     let url = con.to_url(format!("go_get_file/{}", filename));
-    let respuesta = match reqwest::blocking::get(url) {
+    let respuesta = match network::get(&url) {
         Ok(it) => it.text().unwrap(),
         Err(e) => {
             format!("Error de conexion:\n{:?}", e)

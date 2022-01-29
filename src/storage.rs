@@ -7,10 +7,13 @@ use actix_web::{
     http::header::{ContentDisposition, DispositionType},
     post, web, App, Error, HttpResponse, HttpServer, Responder,
 };
-use communication::{connection, general};
+use communication::connection;
 pub mod communication;
 use connection::Connection;
 use fs::NamedFile;
+// pub mod general;
+// use general::filesystem::files;
+use communication::filesystem;
 
 use std::io::Write;
 
@@ -77,7 +80,7 @@ fn send_file_list() {
     let port = get_port();
     println!("enviando archivos a {}", connection.base_str());
 
-    let respuesta = general::send_files(connection, format!("send_files/{}", port), get_dir());
+    let respuesta = connection.send_files(format!("send_files/{}", port), get_dir());
 
     match respuesta {
         Ok(_a) => {
@@ -97,7 +100,7 @@ async fn ping_listener() -> impl Responder {
 #[get("go_get_file/{file_name}")]
 async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder {
     // revisar si no se tiene ya el archivo
-    if !general::get_files_in_dir(get_dir())
+    if !filesystem::get_files_in_dir(get_dir())
         .iter()
         .any(|f| f == &file_name)
     {
@@ -157,7 +160,7 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
 
 #[get("/")]
 fn index() -> HttpResponse {
-    let vec: Vec<String> = general::get_files_in_dir(get_dir());
+    let vec: Vec<String> = filesystem::get_files_in_dir(get_dir());
 
     let archivos: String = vec.iter().map(|f| format!("<li>{}</li>", f)).collect();
 

@@ -9,24 +9,6 @@ pub struct FileList {
 }
 
 impl FileList {
-    pub fn create() -> FileList {
-        let vect: Vec<DistributedFiles> = vec![];
-        FileList { archivos: vect }
-    }
-
-    pub fn print(&self) {
-        for distrib in &self.archivos {
-            println!("conexion : {}", distrib.conexion);
-            for archivo in &distrib.archivos {
-                println!("\t- {}", archivo);
-            }
-        }
-    }
-
-    pub fn size(&self) -> u64 {
-        self.archivos.len() as u64
-    }
-
     /// Agrega una conexion y sus archivos al registro.
     /// Puede que haya una manera mas facil, pero de momento esto parece
     /// servir.
@@ -51,24 +33,9 @@ impl FileList {
         self.print();
     }
 
-    /// Retorna una copia de la lista de archivos
-    pub fn get_files(&self) -> &Vec<DistributedFiles> {
-        &self.archivos
-    }
-
-    /// Conseguir todos los archivos en una conexion especifica.
-    /// En caso de no encontrar la conexion, retorna un vector vacio.
-    /// Retorna una copia de la lista de archivos de la conexion.
-    pub fn get_filenames_by_connection(
-        &self,
-        ip: &str,
-        port: &str,
-    ) -> Result<&Vec<String>, String> {
-        let archivos: &Vec<DistributedFiles> = self.get_files();
-        match archivos.iter().find(|&df| df.comp(ip, port)) {
-            Some(f) => Ok(&f.archivos),
-            None => Err("Conexion no encontrada".to_string()),
-        }
+    pub fn create() -> FileList {
+        let vect: Vec<DistributedFiles> = vec![];
+        FileList { archivos: vect }
     }
 
     /// Conseguir todas las conexiones que contienen un archivo especifico.
@@ -104,6 +71,26 @@ impl FileList {
             .collect()
     }
 
+    /// Conseguir todos los archivos en una conexion especifica.
+    /// En caso de no encontrar la conexion, retorna un vector vacio.
+    /// Retorna una copia de la lista de archivos de la conexion.
+    pub fn get_filenames_by_connection(
+        &self,
+        ip: &str,
+        port: &str,
+    ) -> Result<&Vec<String>, String> {
+        let archivos: &Vec<DistributedFiles> = self.get_files();
+        match archivos.iter().find(|&df| df.comp(ip, port)) {
+            Some(f) => Ok(&f.archivos),
+            None => Err("Conexion no encontrada".to_string()),
+        }
+    }
+
+    /// Retorna una copia de la lista de archivos
+    pub fn get_files(&self) -> &Vec<DistributedFiles> {
+        &self.archivos
+    }
+
     /// Conseguir todas las conexiones que no contienen un archivo especifico.
     /// Retorna una copia de la lista conexiones.
     pub fn get_number_of_files(&self) -> Vec<(String, u64)> {
@@ -120,5 +107,18 @@ impl FileList {
             .into_iter()
             .map(|(key, value)| (key, value))
             .collect()
+    }
+
+    pub fn print(&self) {
+        for distrib in &self.archivos {
+            println!("conexion : {}", distrib.conexion);
+            for archivo in &distrib.archivos {
+                println!("\t- {}", archivo);
+            }
+        }
+    }
+
+    pub fn size(&self) -> u64 {
+        self.archivos.len() as u64
     }
 }
