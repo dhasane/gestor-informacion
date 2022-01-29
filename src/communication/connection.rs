@@ -1,9 +1,9 @@
 use reqwest::blocking::multipart;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::fs::OpenOptions;
-use std::io::copy;
+use std::io::{copy, Write};
 use std::time::SystemTime;
+use std::{fmt, fs};
 
 /// Representa una conexion, contiene ip y puerto.
 #[derive(Deserialize, Serialize, Clone)]
@@ -118,10 +118,16 @@ impl Connection {
         }
     }
 
-    /// Descargarga el archivo FILE_NAME en la carpeta PATH
+    /// Descarga el archivo FILE_NAME en la carpeta PATH.
+    /// Esto funciona unicamente dentro del sistema.
     pub fn download(&self, file_name: &str, path: &str) -> Result<String, String> {
         let url = self.to_url(format!("download/{}", file_name));
+        Connection::download_url(&url, path)
+    }
 
+    /// Descarga el documento encontrado en URL en la direccion PATH.
+    /// Puede llamar urls externas al sistema.
+    pub fn download_url(url: &str, path: &str) -> Result<String, String> {
         // TODO: quitar el blocking cuando sea posible pasar actix-web a usar tokio 1
         let response = match reqwest::blocking::get(url) {
             Ok(it) => it,
@@ -147,12 +153,14 @@ impl Connection {
                 Err(e) => return Err(format!("Error creando el archivo: \n {:?}", e)),
             }
         };
-        let content = response.text().unwrap();
-        match copy(&mut content.as_bytes(), &mut dest) {
+        let content = response.bytes().unwrap();
+
+        // match fs::write(dest, &content) {
+        match dest.write(&content) {
             Ok(_a) => Ok(format!(
-                "Archivo {archivo} de {ip} descargado en {ubicacion}",
-                archivo = file_name,
-                ip = self,
+                "Archivo {archivo:?} de {ip} descargado en {ubicacion}",
+                archivo = dest,
+                ip = url,
                 ubicacion = path
             )),
             Err(e) => Err(format!("Error: {:?}", e)),

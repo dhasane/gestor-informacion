@@ -10,6 +10,7 @@ use actix_web::{
 use communication::{connection, general};
 pub mod communication;
 use connection::Connection;
+use fs::NamedFile;
 
 use std::io::Write;
 
@@ -109,17 +110,14 @@ async fn go_get_file(web::Path(file_name): web::Path<String>) -> impl Responder 
 }
 
 #[get("download/{file_name}")]
-async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<fs::NamedFile, Error> {
+async fn file_serve(web::Path(file_name): web::Path<String>) -> Result<NamedFile, Error> {
     let path: std::path::PathBuf = PathBuf::from(format!(
         "{dir}/{file}",
         dir = get_dir(),
         file = sanitize_filename::sanitize(&file_name)
     ));
-    println!("{:?}", path);
+    println!("Requested file: {file}", file = file_name);
     let file = fs::NamedFile::open(path)?;
-
-    println!("Se descarga archivo: {file}", file = file_name);
-
     Ok(file
         .use_last_modified(true)
         .set_content_disposition(ContentDisposition {
