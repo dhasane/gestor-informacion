@@ -16,8 +16,10 @@ use crate::communication::network;
 
 pub mod communication;
 
+const FILELIST_FILE: &str = "./filelist.json";
+
 lazy_static! {
-    static ref REGISTRO: Arc<Mutex<FileList>> = Arc::new(Mutex::new(FileList::create()));
+    static ref REGISTRO: Arc<Mutex<FileList>> = Arc::new(Mutex::new(FileList::load(FILELIST_FILE)));
 }
 
 // tiempo en segundos para balancear
@@ -236,6 +238,13 @@ async fn main() -> std::io::Result<()> {
             // responder o tomar mas tiempo del necesario, se elimina
             // del registro
             balancear();
+            println!(
+                "{}",
+                match REGISTRO.lock().unwrap().store(FILELIST_FILE) {
+                    Ok(a) => a,
+                    Err(e) => e,
+                },
+            )
         }
     });
 

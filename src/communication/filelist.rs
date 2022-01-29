@@ -1,11 +1,18 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    fs::{File, OpenOptions},
+    io::{BufReader, Write},
+};
 
 use crate::communication::{connection::Connection, distributedfiles::DistributedFiles};
 
+#[derive(Serialize, Deserialize)]
 pub struct FileList {
     archivos: Vec<DistributedFiles>,
+    modified: bool,
 }
 
 impl FileList {
@@ -30,12 +37,16 @@ impl FileList {
             self.archivos.push(dist_file);
         }
 
+        self.modified = true;
         self.print();
     }
 
     pub fn create() -> FileList {
         let vect: Vec<DistributedFiles> = vec![];
-        FileList { archivos: vect }
+        FileList {
+            archivos: vect,
+            modified: false,
+        }
     }
 
     /// Conseguir todas las conexiones que contienen un archivo especifico.
@@ -120,5 +131,45 @@ impl FileList {
 
     pub fn size(&self) -> u64 {
         self.archivos.len() as u64
+    }
+
+    pub fn store(&mut self, path: &str) -> Result<String, String> {
+        if !self.modified {
+            return Ok("nothing has been modified".to_string());
+        }
+        self.modified = false;
+        let mut dest = {
+            match OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(path)
+            {
+                Ok(a) => a,
+                Err(e) => return Err(format!("Error creando el archivo: \n {:?}", e)),
+            }
+        };
+        match dest.write(&serde_json::to_vec(self).unwrap()) {
+            Ok(_a) => Ok(format!(
+                "Archivo {archivo:?} creado en {ubicacion}",
+                archivo = dest,
+                ubicacion = path
+            )),
+            Err(e) => Err(format!("Error: {:?}", e)),
+        }
+    }
+
+    pub fn load(path: &str) -> FileList {
+        match File::open(path) {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+
+                serde_json::from_reader(reader).unwrap()
+            }
+            Err(_e) => {
+                println!("Config file not found");
+                FileList::create()
+            }
+        }
     }
 }
