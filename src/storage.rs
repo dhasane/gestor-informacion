@@ -5,7 +5,9 @@ use actix_multipart::Multipart;
 use actix_web::{
     get,
     http::header::{ContentDisposition, DispositionType},
-    post, web, App, Error, HttpResponse, HttpServer, Responder,
+    post,
+    rt::spawn,
+    web, App, Error, HttpResponse, HttpServer, Responder,
 };
 use communication::connection;
 pub mod communication;
@@ -14,6 +16,9 @@ use fs::NamedFile;
 // pub mod general;
 // use general::filesystem::files;
 use communication::filesystem;
+use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
+use std::sync::mpsc::channel;
+use std::time::Duration;
 
 use std::io::Write;
 
@@ -182,6 +187,43 @@ fn index() -> HttpResponse {
         .body(html)
 }
 
+fn file_watcher() {
+    spawn(async move {
+        // Create a channel to receive the events.
+        let (tx, rx) = channel();
+
+        // Create a watcher object, delivering debounced events.
+        // The notification back-end is selected based on the platform.
+        let mut watcher = watcher(tx, Duration::from_secs(10)).unwrap();
+
+        // Add a path to be watched. All files and directories at that path and
+        // below will be monitored for changes.
+        watcher.watch(get_dir(), RecursiveMode::Recursive).unwrap();
+        loop {
+            match rx.recv() {
+                Ok(event) => {
+                    // println!("{:?}", event);
+                    match event {
+                        DebouncedEvent::Create(..) => {
+                            println!("file created");
+                            send_file_list();
+                        }
+                        DebouncedEvent::NoticeWrite(_) => println!("file NoticeWrite"),
+                        DebouncedEvent::NoticeRemove(_) => println!("file NoticeRemove"),
+                        DebouncedEvent::Write(_) => println!("file Write"),
+                        DebouncedEvent::Chmod(_) => println!("file Chmod"),
+                        DebouncedEvent::Remove(_) => println!("file Remove"),
+                        DebouncedEvent::Rename(_, _) => println!("file Rename"),
+                        DebouncedEvent::Rescan => println!("file Rescan"),
+                        DebouncedEvent::Error(_, _) => println!("file Error"),
+                    };
+                }
+                Err(e) => eprintln!("watch error: {}", e),
+            }
+        }
+    });
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -209,6 +251,8 @@ async fn main() -> std::io::Result<()> {
     std::fs::create_dir_all(get_dir()).unwrap();
 
     send_file_list();
+
+    file_watcher();
 
     let direccion = format!("{ip}:{port}", ip = ip, port = port);
 
