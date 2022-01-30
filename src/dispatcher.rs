@@ -37,7 +37,7 @@ async fn get_connections_filename(web::Path(file_name): web::Path<String>) -> im
     let dirs: Vec<Connection> = REGISTRO
         .lock()
         .unwrap()
-        .get_connections_by_filename(&file_name);
+        .get_connections_by_filename(&file_name, true);
 
     let json = serde_json::to_string(&dirs);
     HttpResponse::Ok().body(match json {
@@ -106,7 +106,7 @@ fn index() -> HttpResponse {
     let numero_archivos: String = REGISTRO
         .lock()
         .unwrap()
-        .get_number_of_files()
+        .get_number_of_files(true)
         .iter()
         .map(|(nombre, cantidad)| -> String {
             format!("<tr><th>{}</th><th>{}</th></tr>", nombre, cantidad)
@@ -171,7 +171,7 @@ fn go_get(con: &Connection, filename: &str) {
 /// Realiza el balanceo de archivos, enviando los archivos que no
 /// tengan suficientes ocurrencias dentro del sistema
 fn balancear() {
-    let numero_archivos: Vec<(String, u64)> = REGISTRO.lock().unwrap().get_number_of_files();
+    let numero_archivos: Vec<(String, u64)> = REGISTRO.lock().unwrap().get_number_of_files(false);
     println!("{:?}", numero_archivos);
 
     let cantidad_conexiones = REGISTRO.lock().unwrap().size();
@@ -197,7 +197,7 @@ fn balancear() {
             let mut conexiones_viables: Vec<Connection> = REGISTRO
                 .lock()
                 .unwrap()
-                .get_connections_without_filename(&nombre);
+                .get_connections_by_filename(&nombre, false);
 
             println!(
                 "conexiones para enviar archivo {} {:?}",
@@ -233,18 +233,9 @@ async fn main() -> std::io::Result<()> {
         let mut interval = time::interval(Duration::from_secs(TIEMPO_BALANCEO));
         loop {
             interval.tick().await;
-            // TODO: hacer algo para verificar si los almacenamientos siguen disponibles
-            // se podria hacer un ping a cada uno y en caso de no
-            // responder o tomar mas tiempo del necesario, se elimina
-            // del registro
+            REGISTRO.lock().unwrap().test_connections();
             balancear();
-            println!(
-                "{}",
-                match REGISTRO.lock().unwrap().store(FILELIST_FILE) {
-                    Ok(a) => a,
-                    Err(e) => e,
-                },
-            )
+            REGISTRO.lock().unwrap().store(FILELIST_FILE);
         }
     });
 

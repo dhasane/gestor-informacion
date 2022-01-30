@@ -40,3 +40,4 @@ futures-util = "0.3.15"
 sanitize-filename = "0.2"
 
 notify = "4.0.17"
+chrono = { version = "0.4.19",  features= ["serde"] }

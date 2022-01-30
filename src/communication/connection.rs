@@ -33,7 +33,12 @@ impl Connection {
         if !conexiones_posibles.is_empty() {
             Ok(conexiones_posibles
                 .iter()
-                .map(|con| (con, network::ping(&con.to_url("ping".to_string())).unwrap()))
+                .filter_map(|con| -> Option<(&Connection, u128)> {
+                    match con.ping() {
+                        Ok(time) => Some((con, time)),
+                        Err(_) => None,
+                    }
+                })
                 .min_by(|con1, con2| con1.1.cmp(&con2.1))
                 .unwrap()
                 .0)
@@ -81,6 +86,10 @@ impl Connection {
     fn pedir_conexiones_viables(&self, file_name: &str) -> Result<Vec<Connection>, String> {
         let url = self.to_url(format!("get_connections/{}", file_name));
         network::get_as_json(&url)
+    }
+
+    pub fn ping(&self) -> Result<u128, network::Error> {
+        network::ping(&self.to_url("ping".to_string()))
     }
 
     /// de las conexiones posibles, se elige la que responda mas
