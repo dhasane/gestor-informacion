@@ -47,7 +47,7 @@ fn set_config(dispatcher: Connection, directorio: String, puerto: String) {
 
 pub fn get_dir() -> String {
     unsafe {
-        if let Some(config) = &CONFIGURACION {
+        if let Some(config) = CONFIGURACION.as_ref() {
             format!("./{dir}", dir = config.directorio)
         } else {
             println!("Error consiguiendo directorio, falta configurar");
@@ -58,7 +58,7 @@ pub fn get_dir() -> String {
 
 pub fn get_dispatcher_con() -> &'static Connection {
     unsafe {
-        if let Some(config) = &CONFIGURACION {
+        if let Some(config) = CONFIGURACION.as_ref() {
             &config.dispatcher
         } else {
             println!("Error consiguiendo conexion a dispatcher, falta configurar");
@@ -69,7 +69,7 @@ pub fn get_dispatcher_con() -> &'static Connection {
 
 pub fn get_port() -> &'static str {
     unsafe {
-        if let Some(config) = &CONFIGURACION {
+        if let Some(config) = CONFIGURACION.as_ref() {
             &config.puerto
         } else {
             println!("Error consiguiendo puerto, falta configurar");

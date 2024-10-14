@@ -9,7 +9,7 @@ use communication::{connection, filelist};
 use connection::Connection;
 use filelist::FileList;
 use lazy_static::lazy_static;
-use rand::{seq::SliceRandom, Rng};
+use rand::seq::SliceRandom;
 use std::sync::{Arc, Mutex};
 
 use crate::communication::network;
@@ -48,14 +48,16 @@ async fn get_connections_filename(web::Path(file_name): web::Path<String>) -> im
 
 #[get("/get_random_connections/{number}")]
 async fn get_connections(web::Path(number): web::Path<usize>) -> impl Responder {
-    let dirs: Vec<Connection> = REGISTRO.lock().unwrap().get_connections();
-
-    let rnd_values: Vec<Connection> = dirs
+    let dirs: Vec<Connection> = REGISTRO
+        .lock()
+        .unwrap()
+        .get_connections()
         .choose_multiple(&mut rand::thread_rng(), number)
         .cloned()
-        .collect();
+        .collect()
+        ;
 
-    let json = serde_json::to_string(&rnd_values);
+    let json = serde_json::to_string(&dirs);
     HttpResponse::Ok().body(match json {
         Ok(it) => it,
         Err(e) => e.to_string(),
@@ -156,7 +158,8 @@ fn index() -> HttpResponse {
         .body(html)
 }
 
-/// Pedir a CON, que vaya y consiga el archivo FILENAME
+/// Pedir a CON, que vaya y consiga el archivo FILENAME.
+/// Se usa para que un nodo de almacenamiento consiga un archivo especifico.
 fn go_get(con: &Connection, filename: &str) {
     let url = con.to_url(format!("go_get_file/{}", filename));
     let respuesta = match network::get(&url) {
@@ -170,52 +173,67 @@ fn go_get(con: &Connection, filename: &str) {
 
 /// Realiza el balanceo de archivos, enviando los archivos que no
 /// tengan suficientes ocurrencias dentro del sistema
-fn balancear() {
-    let numero_archivos: Vec<(String, u64)> = REGISTRO.lock().unwrap().get_number_of_files(false);
+fn balance() {
+    balance_send(
+        balance_find_undistributed(
+            &PORCENTAJE_DISTRIBUCION,
+            &MINIMO_NUMERO_ARCHIVOS,
+            &REGISTRO
+        )
+    )
+}
+
+fn balance_find_undistributed(
+    porcentaje_distribucion: &f64,
+    minimo_numero_archivos: &u64,
+    registro: &Arc<Mutex<FileList>>
+) -> Vec<(Connection, String)> {
+    let numero_archivos: Vec<(String, u64)> = registro.lock().unwrap().get_number_of_files(false);
+    let cantidad_conexiones = registro.lock().unwrap().size();
+    let min_ammount = (cantidad_conexiones as f64 * porcentaje_distribucion) as u64;
+
     println!("{:?}", numero_archivos);
 
-    let cantidad_conexiones = REGISTRO.lock().unwrap().size();
-
-    let mut rng = rand::thread_rng();
-
-    for (nombre, cantidad) in numero_archivos {
-        let porc_min = (cantidad_conexiones as f64 * PORCENTAJE_DISTRIBUCION) as u64;
-
-        // TODO: revisar los porcentajes minimos de distribucion de archivos hasta el maximo
-        let mut diferencia =
-            if cantidad >= MINIMO_NUMERO_ARCHIVOS || cantidad >= cantidad_conexiones {
-                0
-            } else if cantidad < MINIMO_NUMERO_ARCHIVOS {
-                MINIMO_NUMERO_ARCHIVOS - cantidad
-            } else if cantidad < porc_min {
-                porc_min - cantidad
-            } else {
-                0
-            };
-
-        if diferencia != 0 {
-            let mut conexiones_viables: Vec<Connection> = REGISTRO
+    numero_archivos
+        .into_iter()
+        .map( |(name , cantidad) | -> Vec<(Connection, String)> {
+            let difference = balance_min_file_number(
+                &cantidad,
+                &minimo_numero_archivos,
+                &cantidad_conexiones,
+                &min_ammount
+            );
+            registro
                 .lock()
                 .unwrap()
-                .get_connections_by_filename(&nombre, false);
+                .get_connections_by_filename(&name, false)
+                .choose_multiple(&mut rand::thread_rng(), difference as usize)
+                .cloned()
+                .map(|c| (c, name.to_owned()))
+                .collect()
+        })
+        .flatten()
+        .collect::<Vec<(Connection, String)>>()
+}
 
-            println!(
-                "conexiones para enviar archivo {} {:?}",
-                nombre, conexiones_viables
-            );
+fn balance_min_file_number(
+    cantidad: &u64, minimo_numero_archivos: &u64, cantidad_conexiones: &u64, minimum_distribution_num: &u64
+) -> u64 {
+    // TODO: revisar los porcentajes minimos de distribucion de archivos hasta el maximo
+    if cantidad >= minimo_numero_archivos || cantidad >= cantidad_conexiones {
+        0
+    } else if cantidad < &minimo_numero_archivos {
+        minimo_numero_archivos - cantidad
+    } else if cantidad < minimum_distribution_num {
+        minimum_distribution_num - cantidad
+    } else {
+        0
+    }
+}
 
-            while diferencia > 0 && !conexiones_viables.is_empty() {
-                let pos = rng.gen_range(0..conexiones_viables.len());
-
-                let conexion: Connection = conexiones_viables.remove(pos);
-
-                println!("{} <- {}", conexion, nombre);
-                go_get(&conexion, &nombre);
-
-                diferencia -= 1;
-            }
-            println!("================================");
-        }
+fn balance_send(connections: Vec<(Connection, String)>) {
+    for (con, name) in connections {
+        go_get(&con, &name)
     }
 }
 
@@ -234,7 +252,7 @@ async fn main() -> std::io::Result<()> {
         loop {
             interval.tick().await;
             REGISTRO.lock().unwrap().test_connections();
-            balancear();
+            balance();
             REGISTRO.lock().unwrap().store(FILELIST_FILE);
         }
     });

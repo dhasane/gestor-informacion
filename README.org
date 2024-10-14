@@ -1,6 +1,4 @@
 * gestor-informacion
-Proyecto para la clase de sitemas distribuidos 
-
 Proyecto realizado en rust, para actuar como CDN.
 Para esto se generan 3 ejecutables, siendo estos 
 - Dispatcher
